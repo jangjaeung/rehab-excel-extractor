@@ -14,7 +14,7 @@
     "build:electron": "tsc -p tsconfig.electron.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "npm run build && electron .",
-    "package": "npm run build && electron-builder",
+    "package": "npm run build && node scripts/prepare-wincodesign.mjs && electron-builder",
     "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {

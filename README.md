@@ -90,35 +90,31 @@ npm start          # 빌드 후 Electron 실행
 npm run package    # release/ 폴더에 Windows 설치 파일 생성
 ```
 
-생성물: `release\StretchSprayExtractor Setup 1.0.0.exe` (약 80MB, 사용자 단위 설치)
+생성물: `release\StretchSprayExtractor Setup 1.0.0.exe` (약 85MB, 사용자 단위 설치)
 설치 없이 바로 쓰려면 `release\win-unpacked\StretchSprayExtractor.exe` 를 실행하면 됩니다.
+(무설치판은 **폴더째** 옮겨야 합니다. exe 하나만 복사하면 실행되지 않습니다.)
 
-> **`npm run package` 가 심볼릭 링크 오류로 실패하는 경우**
+> **코드 서명 도구(winCodeSign) 심볼릭 링크 문제는 자동으로 처리됩니다**
+>
+> electron-builder 는 설치 파일을 만들기 직전에 `winCodeSign` 압축을 푸는데,
+> 그 안에 **macOS 전용 심볼릭 링크**(`darwin/.../libcrypto.dylib`)가 들어 있습니다.
+> Windows 에서 심볼릭 링크를 만들려면 관리자 권한이나 개발자 모드가 필요해서 아래 오류로 멈춥니다.
 >
 > ```
 > ⨯ cannot execute  cause=exit status 2
 > ERROR: Cannot create symbolic link : 클라이언트가 필요한 권한을 가지고 있지 않습니다.
->        ...\winCodeSign\...\darwin\10.12\lib\libcrypto.dylib
 > ```
 >
-> electron-builder 가 코드 서명 도구(`winCodeSign`) 압축을 풀 때 **macOS 전용 심볼릭 링크**를 만들려 하는데,
-> Windows 에서는 심볼릭 링크 생성에 관리자 권한 또는 개발자 모드가 필요해서 발생합니다.
-> Windows 빌드에는 `darwin` 폴더가 필요 없으므로, 아래 셋 중 하나로 해결합니다.
+> 이때 `release\win-unpacked` 까지만 만들어지고 **설치 파일은 나오지 않습니다.**
 >
-> **① 캐시를 직접 풀어 두기 (권장 · 권한 불필요)**
+> 그래서 `package` 스크립트가 [scripts/prepare-wincodesign.mjs](scripts/prepare-wincodesign.mjs) 를 먼저 실행합니다.
+> Windows 빌드에 `darwin` 폴더는 필요 없으므로 그 폴더만 빼고 캐시에 미리 풀어 두고,
+> electron-builder 는 '이미 있다' 고 보고 압축 해제 단계를 건너뜁니다.
 >
-> ```powershell
-> $cache = "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign"
-> New-Item -ItemType Directory -Force -Path $cache | Out-Null
-> Invoke-WebRequest "https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z" -OutFile "$cache\winCodeSign-2.6.0.7z"
-> & ".\node_modules\7zip-bin\win\x64\7za.exe" x -bd -y "$cache\winCodeSign-2.6.0.7z" "-o$cache\winCodeSign-2.6.0" "-xr!darwin"
-> ```
->
-> 이후 `npm run package` 를 다시 실행하면 캐시가 이미 있으므로 압축 해제 단계를 건너뜁니다. (한 번만 하면 됩니다.)
->
-> **② Windows 개발자 모드 켜기** — 설정 → 개인 정보 및 보안 → 개발자용 → 개발자 모드 ON
->
-> **③ 관리자 권한 터미널**에서 `npm run package` 실행
+> * 관리자 권한이 필요 없습니다.
+> * 캐시가 이미 준비돼 있으면 아무 일도 하지 않으므로 매번 실행해도 됩니다.
+> * 새 PC 에서도 `pnpm install` 후 `pnpm package` 만 하면 됩니다.
+> * Windows 가 아니면 그냥 건너뜁니다.
 
 ### 기타 스크립트
 
