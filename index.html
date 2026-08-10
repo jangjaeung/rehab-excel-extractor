@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      로컬 리소스만 사용하는 오프라인 앱이므로 외부 네트워크 로드를 전면 차단한다.
+      ('unsafe-inline' 은 Vite 개발 서버가 삽입하는 HMR 프리앰블 때문에 필요하다.)
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:5173;"
+    />
+    <title>신장분사 실적 추출기</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

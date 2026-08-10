@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-electron/
+release/
+*.log
+.DS_Store
+
+# 이 PC 에서만 쓰는 로컬 설정 (절대 경로가 들어간다)
+.claude/settings.local.json

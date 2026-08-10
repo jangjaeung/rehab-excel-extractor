@@ -1,0 +1,275 @@
+:root {
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-border: #d9dde3;
+  --color-text: #1f2430;
+  --color-muted: #6b7280;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-error: #b91c1c;
+  --color-error-bg: #fee2e2;
+  --color-info: #1e40af;
+  --color-info-bg: #dbeafe;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Malgun Gothic', 'Segoe UI', system-ui, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+.app {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+.app__header h1 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.app__subtitle {
+  margin: 0 0 20px;
+  color: var(--color-muted);
+}
+
+/* 감춰진 탭이 grid/flex 규칙 때문에 다시 보이는 것을 막는다. */
+[hidden] {
+  display: none !important;
+}
+
+/* ----- 탭 ----- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tabs__item {
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.tabs__item:hover {
+  color: var(--color-text);
+}
+
+.tabs__item--active {
+  border-bottom-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* ----- 파일 선택 영역 ----- */
+.dropzone {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  padding: 24px;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dropzone--active {
+  border-color: var(--color-primary);
+  background: #eff6ff;
+}
+
+.dropzone--disabled {
+  opacity: 0.6;
+}
+
+.dropzone__input {
+  display: none;
+}
+
+/* 업로드가 여러 개인 탭에서 무엇을 올리는 자리인지 표시한다. */
+.dropzone__title {
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+
+/* 연차 추출기처럼 업로드가 둘 이상일 때 나란히 배치한다. */
+.upload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.dropzone__hint {
+  margin: 12px 0 4px;
+  color: var(--color-muted);
+}
+
+.dropzone__filename {
+  margin: 0;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+/* ----- 버튼 ----- */
+.actions {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.button {
+  padding: 8px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.button--primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.button--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ----- 메시지 ----- */
+.message {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  word-break: break-all;
+}
+
+.message--error {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.message--info {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+/* ----- 결과 ----- */
+.result__summary {
+  display: flex;
+  gap: 16px;
+  margin: 16px 0 8px;
+  color: var(--color-muted);
+}
+
+.warnings {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.warnings summary {
+  cursor: pointer;
+  color: var(--color-muted);
+}
+
+.warnings ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--color-muted);
+}
+
+.table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+.result-table th,
+.result-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.result-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+.result-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.result-table td.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 날짜 목록·원본 표기처럼 긴 값은 줄바꿈을 허용한다. */
+.result-table td.wrap {
+  max-width: 320px;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.result-table td.muted {
+  color: var(--color-muted);
+}
+
+/* 반영 결과를 색으로 구분한다. */
+.result-table td.status {
+  font-weight: 600;
+}
+
+.result-table td.status--warn {
+  color: #b45309;
+}
+
+.result-table td.status--error {
+  color: var(--color-error);
+}
+
+.result__title {
+  margin: 20px 0 8px;
+  font-size: 15px;
+}
+
+.empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-muted);
+}
