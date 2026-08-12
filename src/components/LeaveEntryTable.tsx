@@ -1,17 +1,19 @@
 import type { JSX } from 'react';
 import type { LeaveEntry } from '../types/leave';
-import { LEAVE_COLUMN_LABELS } from '../utils/constants';
+import { ANNUAL_LEAVE_KEYWORD, HALF_DAY_KEYWORD, LEAVE_COLUMN_LABELS } from '../utils/constants';
 
 interface LeaveEntryTableProps {
   entries: readonly LeaveEntry[];
 }
 
-/** '연차' / '공가' / '오후 반차' / (시간대 표기가 없으면) '반차' */
+/** '연차' / '오후 반차' / '오후 공가' / '경조' / '특근' */
 function formatKind(entry: LeaveEntry): string {
-  if (entry.halfPeriod === null) {
-    return entry.kind;
+  const period = entry.halfPeriod === null ? '' : `${entry.halfPeriod} `;
+
+  if (entry.kind === ANNUAL_LEAVE_KEYWORD && entry.half) {
+    return `${period}${HALF_DAY_KEYWORD}`;
   }
-  return `${entry.halfPeriod} ${entry.kind}`;
+  return `${period}${entry.kind}`;
 }
 
 /**

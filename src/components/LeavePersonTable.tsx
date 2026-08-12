@@ -45,6 +45,7 @@ export function LeavePersonTable({ people }: LeavePersonTableProps): JSX.Element
             <th>{LEAVE_COLUMN_LABELS.halfCount}</th>
             <th>{LEAVE_COLUMN_LABELS.publicCount}</th>
             <th>{LEAVE_COLUMN_LABELS.familyEventCount}</th>
+            <th>{LEAVE_COLUMN_LABELS.specialDutyCount}</th>
             <th>{LEAVE_COLUMN_LABELS.totalDays}</th>
             <th>{LEAVE_COLUMN_LABELS.dates}</th>
           </tr>
@@ -58,6 +59,7 @@ export function LeavePersonTable({ people }: LeavePersonTableProps): JSX.Element
               <td className="numeric">{formatHalfCount(person)}</td>
               <td className="numeric">{person.publicCount}일</td>
               <td className="numeric">{person.familyEventCount}일</td>
+              <td className="numeric">{person.specialDutyCount}회</td>
               <td className="numeric">{person.totalDays}일</td>
               <td className="wrap">{person.dates.join(', ')}</td>
             </tr>

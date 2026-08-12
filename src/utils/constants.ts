@@ -86,14 +86,17 @@ export const LEAVE_QUALIFIERS = [
   '교육',
 ];
 
-/** 기록 종류 */
+/** 기록 종류 (= 쉬는 이유) */
 export const ANNUAL_LEAVE_KEYWORD = '연차';
-export const HALF_DAY_KEYWORD = '반차';
 export const PUBLIC_LEAVE_KEYWORD = '공가';
 export const FAMILY_EVENT_KEYWORD = '경조';
+export const SPECIAL_DUTY_KEYWORD = '특근';
+
+/** 길이(반차) 판정 키워드. 종류와 별개로 붙는다. ('검진 오후반차') */
+export const HALF_DAY_KEYWORD = '반차';
 
 /**
- * 셀에 적힌 낱말 → 기록 종류.
+ * 셀에 적힌 낱말 → 쉬는 이유.
  * 위에서부터 먼저 맞는 것을 쓰므로, 좁은 낱말('경조사')을 넓은 낱말('경조')보다 앞에 둔다.
  * 종류를 늘리려면 이 표에만 한 줄 추가하면 된다.
  */
@@ -103,12 +106,15 @@ export const LEAVE_KIND_KEYWORDS = [
   { keyword: '경조', kind: FAMILY_EVENT_KEYWORD },
   { keyword: '예비군', kind: PUBLIC_LEAVE_KEYWORD },
   { keyword: '교육', kind: PUBLIC_LEAVE_KEYWORD },
+  { keyword: '검진', kind: PUBLIC_LEAVE_KEYWORD },
   { keyword: '공가', kind: PUBLIC_LEAVE_KEYWORD },
-  { keyword: '반차', kind: HALF_DAY_KEYWORD },
 ] as const;
 
-/** 연차에서 차감되는 종류 (공가·경조는 차감되지 않는다) */
-export const DEDUCTED_KINDS = [ANNUAL_LEAVE_KEYWORD, HALF_DAY_KEYWORD];
+/** 연차에서 차감되는 종류 (공가·경조·특근은 차감되지 않는다) */
+export const DEDUCTED_KINDS = [ANNUAL_LEAVE_KEYWORD];
+
+/** 대괄호로 묶인 인원은 특근으로 본다. ('[홍길동]') */
+export const SPECIAL_DUTY_BRACKET_PATTERN = /\[([^\]]*)\]/g;
 
 /** 반차 시간대 판정 키워드 */
 export const MORNING_KEYWORD = '오전';
@@ -133,8 +139,9 @@ export const LEAVE_COLUMN_LABELS = {
   raw: '원본',
   fullCount: '연차',
   halfCount: '반차 (오전/오후)',
-  publicCount: '공가 (예비군 포함)',
+  publicCount: '공가 (예비군·교육·검진)',
   familyEventCount: '경조',
+  specialDutyCount: '특근',
   totalDays: '연차 합계',
   dates: '사용 날짜',
 } as const;
@@ -163,17 +170,34 @@ export const SCHEDULE_MONTH_PATTERN = /(\d{1,2})\s*월/;
 export const MIN_DAY_OF_MONTH = 1;
 export const MAX_DAY_OF_MONTH = 31;
 
-/** 근무표에 넣을 표기 */
-export const SCHEDULE_MARKERS = {
-  annual: 'off',
-  morningHalf: '오전 off',
-  afternoonHalf: '오후 off',
-  public: '공가 off',
-  familyEvent: '경조 off',
-};
+/**
+ * 근무표에 넣을 표기.
+ * '이유' 앞에 '오전/오후' 가 붙는 구조라 조각으로 두고 조합한다.
+ *   연차 종일 → off        연차 오후 → 오후 off
+ *   공가 종일 → 공가 off    공가 오후 → 오후 공가 off
+ */
+export const SCHEDULE_OFF_MARKER = 'off';
+export const SCHEDULE_WORK_MARKER = 'D';
+export const SCHEDULE_REST_MARKER = '·';
 
 /** 원래 들어 있어도 덮어썼다고 보지 않는 값 (근무 표시·빈칸) */
 export const SCHEDULE_PLAIN_VALUES = ['', 'D', '·', '.', '-'];
+
+/** 집계 컬럼 머리글 (공백을 없앤 형태로 비교한다) */
+export const SCHEDULE_OFF_COUNT_HEADER = '오프';
+export const SCHEDULE_LEAVE_COUNT_HEADER = '월차연차';
+
+/** 반차 한 건이 차지하는 일수 */
+export const SCHEDULE_HALF_UNIT = 0.5;
+export const SCHEDULE_FULL_UNIT = 1;
+
+/** 주말 요일 라벨. 토·일은 사람마다 근무가 달라 자동으로 채우지 않는다. */
+export const WEEKEND_LABELS = ['일', '토'];
+
+/** 평일을 D 로 채울 요일 번호 (Date 의 getUTCDay 기준) */
+export const SCHEDULE_WORKING_WEEKDAYS = WEEKDAY_LABELS.map((label, index) => ({ label, index }))
+  .filter((weekday) => !WEEKEND_LABELS.includes(weekday.label))
+  .map((weekday) => weekday.index);
 
 /** 저장 파일명 뒤에 붙일 말 */
 export const SCHEDULE_RESULT_SUFFIX = '_연차반영';

@@ -5,7 +5,9 @@ import {
   SCHEDULE_DATE_HEADER,
   SCHEDULE_HEADER_SCAN_COLS,
   SCHEDULE_HEADER_SCAN_ROWS,
+  SCHEDULE_LEAVE_COUNT_HEADER,
   SCHEDULE_MONTH_PATTERN,
+  SCHEDULE_OFF_COUNT_HEADER,
   SCHEDULE_NAME_GAP_LIMIT,
   SCHEDULE_NON_NAME_LABELS,
   SCHEDULE_YEAR_PATTERN,
@@ -42,10 +44,22 @@ export interface ScheduleSheet {
   sheetName: string;
   year: number | null;
   month: number | null;
+  /** 날짜가 적히는 행 (1-based) */
+  headerRow: number;
+  /** 요일이 적히는 행 (날짜 행 바로 아래) */
+  weekdayRow: number;
+  /** 성명 열 */
+  nameColumn: number;
+  /** 날짜가 놓일 수 있는 열 전체 (집계 컬럼 직전까지) */
+  dateBand: number[];
   /** 날짜(1~31) → 열 번호 (1-based) */
   dayColumns: Map<number, number>;
   /** 이름 → 행 번호 (1-based) */
   nameRows: Map<string, number>;
+  /** '오프' 집계 열 */
+  offColumn: number | null;
+  /** '월차연차' 집계 열 */
+  leaveColumn: number | null;
 }
 
 /** 근무표 파일 전체 */
@@ -97,14 +111,55 @@ function analyzeSheet(worksheet: ExcelJS.Worksheet): ScheduleSheet | null {
     return null;
   }
 
+  const dateBand = findDateBand(worksheet, header);
+
   return {
     worksheet,
     sheetName: worksheet.name,
     year: findYear(worksheet, header.row),
     month: findMonth(worksheet, header.row),
+    headerRow: header.row,
+    weekdayRow: header.row + 1,
+    nameColumn: header.col,
+    dateBand,
     dayColumns: findDayColumns(worksheet, header),
     nameRows: findNameRows(worksheet, header),
+    offColumn: findLabeledColumn(worksheet, header, SCHEDULE_OFF_COUNT_HEADER),
+    leaveColumn: findLabeledColumn(worksheet, header, SCHEDULE_LEAVE_COUNT_HEADER),
   };
+}
+
+/**
+ * 날짜가 놓일 수 있는 열 범위.
+ * 성명 열 다음부터, 머리글에 글자가 적힌 집계 열('오프' 등)을 만나기 직전까지다.
+ * 날짜 칸이 비어 있는 시트도 다시 채울 수 있도록 숫자 유무와 무관하게 모은다.
+ */
+function findDateBand(worksheet: ExcelJS.Worksheet, header: { row: number; col: number }): number[] {
+  const columns: number[] = [];
+
+  for (let col = header.col + 1; col <= worksheet.columnCount; col += 1) {
+    const value = worksheet.getCell(header.row, col).value;
+    if (typeof value === 'string' && compact(value) !== '') {
+      break;
+    }
+    columns.push(col);
+  }
+
+  return columns;
+}
+
+/** 머리글 행에서 특정 라벨이 적힌 열을 찾는다. */
+function findLabeledColumn(
+  worksheet: ExcelJS.Worksheet,
+  header: { row: number; col: number },
+  label: string,
+): number | null {
+  for (let col = header.col + 1; col <= worksheet.columnCount; col += 1) {
+    if (compact(cellText(worksheet, header.row, col)) === label) {
+      return col;
+    }
+  }
+  return null;
 }
 
 /** '날짜' 라고 적힌 셀 찾기 */

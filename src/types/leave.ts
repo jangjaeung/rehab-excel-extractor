@@ -4,10 +4,14 @@
 export type HalfDayPeriod = '오전' | '오후';
 
 /**
- * 기록의 종류.
- * 공가(예비군 포함)와 경조는 연차에서 차감되지 않으므로 연차/반차와 따로 센다.
+ * 기록의 종류(= 쉬는 이유).
+ * 공가(예비군·교육·검진 포함)와 경조는 연차에서 차감되지 않으므로 따로 센다.
+ * 특근은 쉬는 것이 아니라 추가 근무다.
+ *
+ * 반차는 종류가 아니라 '길이'(half)로 따로 둔다.
+ * '검진 오후반차' 처럼 이유와 길이가 함께 붙는 표기가 있기 때문이다.
  */
-export type LeaveKind = '연차' | '반차' | '공가' | '경조';
+export type LeaveKind = '연차' | '공가' | '경조' | '특근';
 
 /** 연차/반차 표기 1건 (= 한 사람이 하루 쓴 기록) */
 export interface LeaveEntry {
@@ -21,11 +25,13 @@ export interface LeaveEntry {
   monthDay: string;
   /** 요일 한 글자 (월) */
   weekday: string;
-  /** 연차 / 반차 / 공가 */
+  /** 쉬는 이유 (연차 / 공가 / 경조 / 특근) */
   kind: LeaveKind;
+  /** 반차 여부 */
+  half: boolean;
   /** 반차를 쓴 시간대. 반차가 아니거나 시트에 오전/오후가 적혀 있지 않으면 null */
   halfPeriod: HalfDayPeriod | null;
-  /** 사용 일수 (연차·공가 1, 반차 0.5) */
+  /** 사용 일수 (종일 1, 반차 0.5, 특근 0) */
   days: number;
   /** 괄호 안에 적힌 누적 사용 표기 ('연차9' → '9'). 비어 있으면 null */
   counter: string | null;
@@ -48,11 +54,13 @@ export interface LeavePersonSummary {
   morningCount: number;
   /** 그중 오후 반차 건수 */
   afternoonCount: number;
-  /** 공가 건수 (예비군 포함. 연차에서 차감되지 않는다) */
+  /** 공가 건수 (예비군·교육·검진 포함. 연차에서 차감되지 않는다) */
   publicCount: number;
   /** 경조 건수 (연차에서 차감되지 않는다) */
   familyEventCount: number;
-  /** 연차 합계 일수 (반차는 0.5로 계산, 공가·경조는 제외) */
+  /** 특근 건수 */
+  specialDutyCount: number;
+  /** 연차 합계 일수 (반차는 0.5로 계산, 공가·경조·특근은 제외) */
   totalDays: number;
   /** 사용한 날짜 목록 (2/9 형태, 날짜 오름차순). 공가·경조는 '7/20(공가)' 로 표시한다. */
   dates: string[];

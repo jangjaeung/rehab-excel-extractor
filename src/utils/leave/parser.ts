@@ -5,6 +5,7 @@ import {
   AFTERNOON_KEYWORD,
   ANNUAL_LEAVE_KEYWORD,
   DEDUCTED_KINDS,
+  FAMILY_EVENT_KEYWORD,
   FULL_DAY_VALUE,
   HALF_DAY_KEYWORD,
   HALF_DAY_VALUE,
@@ -17,6 +18,8 @@ import {
   MIN_DATE_SERIAL,
   MORNING_KEYWORD,
   PUBLIC_LEAVE_KEYWORD,
+  SPECIAL_DUTY_BRACKET_PATTERN,
+  SPECIAL_DUTY_KEYWORD,
   WEEKDAY_LABELS,
 } from '../constants';
 import { getCell, getRowLength, toText } from '../excel/cell';
@@ -211,7 +214,7 @@ function readDayCell(
       warnings.push(`${sheetName} ${isoDate} ${item.name}: 괄호 안 숫자가 비어 있습니다. → '${text}'`);
     }
 
-    if (item.kind === HALF_DAY_KEYWORD && item.halfPeriod === null) {
+    if (item.half && item.halfPeriod === null) {
       warnings.push(`${sheetName} ${isoDate} ${item.name}: 반차인데 오전/오후 표기가 없습니다. → '${text}'`);
     }
 
@@ -222,8 +225,9 @@ function readDayCell(
       monthDay: `${String(date.getUTCMonth() + 1)}/${String(date.getUTCDate())}`,
       weekday: WEEKDAY_LABELS[date.getUTCDay()] ?? '',
       kind: item.kind,
+      half: item.half,
       halfPeriod: item.halfPeriod,
-      days: item.kind === HALF_DAY_KEYWORD ? HALF_DAY_VALUE : FULL_DAY_VALUE,
+      days: item.kind === SPECIAL_DUTY_KEYWORD ? 0 : item.half ? HALF_DAY_VALUE : FULL_DAY_VALUE,
       counter: item.counter,
       sheetName,
       raw: text,
@@ -277,6 +281,7 @@ function findDateColumns(grid: SheetGrid, row: number): number[] {
 interface ParsedLeave {
   name: string;
   kind: LeaveKind;
+  half: boolean;
   halfPeriod: HalfDayPeriod | null;
   counter: string | null;
   /** 괄호가 붙은 표기였는지 (누적 일수를 적을 자리가 있었는지) */
@@ -296,10 +301,16 @@ function parseLeaveText(text: string, roster: readonly string[]): ParsedLeave[] 
   // '오후 반차' / '오후반차' 가 섞여 있어도 같은 규칙으로 읽기 위함이다.
   const scanText = text.replace(WHITESPACE_RUN, '');
   const hits = findRosterNames(scanText, roster);
+  const brackets = findBracketRanges(scanText);
 
   return hits.flatMap((hit, index) => {
     const scope = scanText.slice(hit.start, hits[index + 1]?.start ?? scanText.length);
     const paren = PAREN_CONTENT_PATTERN.exec(scope)?.[1] ?? null;
+
+    // 대괄호로 묶인 사람은 쉬는 것이 아니라 특근이다. ('[홍길동]')
+    if (brackets.some((range) => hit.start >= range.start && hit.start < range.end)) {
+      return [{ name: hit.name, kind: SPECIAL_DUTY_KEYWORD, half: false, halfPeriod: null, counter: null, hasParen: false }];
+    }
 
     // 괄호가 없는데 이름 말고 다른 낱말이 남으면 연차 기록이 아니다.
     // ('이찬규교육', '이호근알바 퇴사', '오혜원 퇴사')
@@ -307,18 +318,35 @@ function parseLeaveText(text: string, roster: readonly string[]): ParsedLeave[] 
       return [];
     }
 
-    const kind = resolveKind(scope);
+    // 첫 기록 앞에 붙은 설명은 그 사람의 것으로 본다. ('직원검진 임재민(오후반차)')
+    const reasonText = index === 0 ? scanText.slice(0, hit.start) + scope : scope;
+    const half = scope.includes(HALF_DAY_KEYWORD);
 
     return [
       {
         name: hit.name,
-        kind,
-        halfPeriod: kind === HALF_DAY_KEYWORD ? findHalfPeriod(scope) : null,
+        kind: resolveKind(reasonText),
+        half,
+        halfPeriod: half ? findHalfPeriod(scope) : null,
         counter: paren === null ? null : (LEAVE_COUNTER_PATTERN.exec(paren)?.[0] ?? null),
         hasParen: paren !== null,
       },
     ];
   });
+}
+
+/** 대괄호 구간 (특근 표기) */
+function findBracketRanges(text: string): { start: number; end: number }[] {
+  const pattern = new RegExp(SPECIAL_DUTY_BRACKET_PATTERN.source, 'g');
+  const ranges: { start: number; end: number }[] = [];
+
+  let match = pattern.exec(text);
+  while (match !== null) {
+    ranges.push({ start: match.index, end: pattern.lastIndex });
+    match = pattern.exec(text);
+  }
+
+  return ranges;
 }
 
 /**
@@ -448,20 +476,23 @@ export function summarizeLeaveEntries(entries: readonly LeaveEntry[]): LeavePers
       afternoonCount: 0,
       publicCount: 0,
       familyEventCount: 0,
+      specialDutyCount: 0,
       totalDays: 0,
       dates: [],
     };
 
     if (!isDeducted(entry.kind)) {
-      // 공가·경조는 연차에서 차감되지 않으므로 합계 일수에 넣지 않는다.
+      // 공가·경조·특근은 연차에서 차감되지 않으므로 합계 일수에 넣지 않는다.
       if (entry.kind === PUBLIC_LEAVE_KEYWORD) {
         found.publicCount += 1;
-      } else {
+      } else if (entry.kind === FAMILY_EVENT_KEYWORD) {
         found.familyEventCount += 1;
+      } else {
+        found.specialDutyCount += 1;
       }
       found.dates.push(`${entry.monthDay}(${entry.kind})`);
     } else {
-      if (entry.kind === HALF_DAY_KEYWORD) {
+      if (entry.half) {
         found.halfCount += 1;
         if (entry.halfPeriod === MORNING_KEYWORD) {
           found.morningCount += 1;
