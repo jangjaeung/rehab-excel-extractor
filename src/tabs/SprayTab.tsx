@@ -15,7 +15,7 @@ export function SprayTab(): JSX.Element {
 
   const isBusy = status !== 'idle';
   const canExtract = file !== null && !isBusy;
-  const canSave = result !== null && result.rows.length > 0 && !isBusy;
+  const canSave = result !== null && result.weeks.length > 0 && !isBusy;
 
   return (
     <>
@@ -36,12 +36,21 @@ export function SprayTab(): JSX.Element {
       {result !== null && (
         <section className="result">
           <div className="result__summary">
-            <span>시트: {result.sheetName}</span>
-            <span>치료사 {result.rows.length}명</span>
+            <span>주차 {result.weeks.length}개</span>
             <span>항목 {result.columns.length}개</span>
           </div>
+
           <WarningList warnings={result.warnings} />
-          <ResultTable result={result} />
+
+          {result.weeks.map((week) => (
+            <div key={week.sheetName}>
+              <h2 className="result__title">
+                {week.label} <span className="result__subtitle">{week.sheetName} · 치료사 {week.rows.length}명</span>
+              </h2>
+              <WarningList warnings={week.warnings} />
+              <ResultTable columns={result.columns} rows={week.rows} />
+            </div>
+          ))}
         </section>
       )}
     </>

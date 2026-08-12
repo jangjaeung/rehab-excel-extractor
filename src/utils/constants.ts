@@ -12,11 +12,17 @@ export const TOTAL_COUNT_HEADER = '합계건수';
 /** PT 번호 패턴. 'PT288', 'pt 288', 'PT-288' 등을 허용한다. */
 export const PT_NUMBER_PATTERN = /PT\s*-?\s*(\d+)/i;
 
-/** 항상 첫 번째 시트를 사용한다. */
-export const TARGET_SHEET_INDEX = 0;
+/**
+ * 시트 하나가 한 주차다. ('26년 7월 1일~4일' 처럼 기간이 이름에 들어간다)
+ * 시트 개수가 4주든 5주든 그대로 따라가므로 주차 수를 고정하지 않는다.
+ */
+export const WEEK_LABEL_SUFFIX = '주차';
 
 /** 숫자를 찾지 못했을 때 사용할 기본 건수 */
 export const DEFAULT_ITEM_COUNT = 0;
+
+/** 블록 안에서 이름이 아닌 고정 라벨 (PT번호 없이 이름을 찾을 때 걸러 낸다) */
+export const BLOCK_LABEL_WORDS = ['치료사', '팀장', '건수', '유무', '타임', '월'];
 
 /** PT 번호 행 위로 이름을 찾을 때 최대 몇 행까지 거슬러 올라갈지 (빈 행 대비) */
 export const MAX_NAME_LOOKUP_ROWS = 5;

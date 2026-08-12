@@ -187,7 +187,7 @@ PT번호·이름 탐색과 합계 대체값 탐색이 모두 이 범위 안에�
 ```
 File
  └─ arrayBuffer()
-     └─ XLSX.read                       첫 번째 시트만 사용
+     └─ XLSX.read                       시트 하나 = 한 주차 (빈 시트는 건너뜀)
          └─ buildGrid()                 시트 → 인덱스가 원본과 일치하는 2차원 배열
              ├─ findTotalHeaders()      '합계건수' 헤더 좌표 전부 수집
              ├─ findSprayItemCells()    '신장분사*' 셀 좌표 전부 수집
@@ -235,8 +235,14 @@ parseExcelBuffer(buffer: ArrayBuffer): ParseResult // 테스트용 동기 진입
 
 ```ts
 interface ParseResult {
-  sheetName: string;      // 실제 파싱한 시트 이름
-  columns: string[];      // 오름차순 정렬된 신장분사 항목 목록
+  weeks: WeekResult[];    // 주차별 결과 (시트 순서 유지)
+  columns: string[];      // 모든 주차를 합친 항목 목록 (오름차순)
+  warnings: string[];     // 파일 전체에 해당하는 문제
+}
+
+interface WeekResult {
+  sheetName: string;      // 원본 시트 이름 (26년 7월 1일~4일)
+  label: string;          // 1주차
   rows: TherapistRecord[];// 치료사별 결과 (시트 등장 순서 유지)
   warnings: string[];     // 확인이 필요한 비치명적 문제
 }
@@ -334,7 +340,9 @@ PT211 '신장분사B20': 시트의 합계건수(3)와 날짜 합계(0)가 다릅
 | 숫자가 없음 | `0` (`DEFAULT_ITEM_COUNT`) |
 | 시트의 합계 수식이 깨짐 | 날짜 칸을 직접 합산하고, 값이 다르면 경고 |
 | 신장분사 항목이 없는 치료사 | 결과에서 제외 (항목 셀에서만 레코드를 만들기 때문) |
-| 시트가 여러 개 | 첫 번째 시트만 사용 (`TARGET_SHEET_INDEX`) |
+| 시트가 여러 개 | 시트 하나를 한 주차로 보고 모두 추출 (주차 수는 고정하지 않음) |
+| 빈 시트 / 항목 없는 시트 | 주차에서 제외 (`시트1`, `시트2` 등) |
+| PT번호가 빠진 블록 | 블록 첫 열에서 이름을 찾아 이름으로 묶고 경고 |
 | 같은 치료사 중복 등장 | PT 번호 기준으로 한 행에 병합 |
 | 같은 항목 중복 등장 | 최초 값 유지 + 경고 |
 | PT 번호를 못 찾음 | 해당 항목 제외 + 경고 |

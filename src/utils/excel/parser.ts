@@ -1,13 +1,14 @@
 import * as XLSX from 'xlsx';
 import type { CellPosition, CellValue, ParseResult, SheetGrid, TherapistRecord } from '../../types/excel';
 import {
+  BLOCK_LABEL_WORDS,
   DEFAULT_ITEM_COUNT,
   MAX_NAME_LOOKUP_ROWS,
   MAX_PT_LOOKUP_ROWS,
   PT_NUMBER_PATTERN,
   SPRAY_ITEM_PREFIX,
-  TARGET_SHEET_INDEX,
   TOTAL_COUNT_HEADER,
+  WEEK_LABEL_SUFFIX,
 } from '../constants';
 import { getCell, getRowLength, isBlank, normalizeText, toNumberOrNull, toText } from './cell';
 import { buildGrid } from './grid';
@@ -81,28 +82,60 @@ export async function parseExcel(file: File): Promise<ParseResult> {
 export function parseExcelBuffer(buffer: ArrayBuffer): ParseResult {
   const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
 
-  const sheetName = workbook.SheetNames[TARGET_SHEET_INDEX];
-  if (sheetName === undefined) {
+  if (workbook.SheetNames.length === 0) {
     throw new Error('엑셀 파일에 시트가 없습니다.');
   }
 
-  const sheet = workbook.Sheets[sheetName];
-  if (sheet === undefined) {
-    throw new Error(`시트 '${sheetName}' 를 읽을 수 없습니다.`);
+  const warnings: string[] = [];
+  const collected: { sheetName: string; extracted: SheetExtraction }[] = [];
+
+  // 시트 하나가 한 주차다. 빈 시트('시트1' 등)와 신장분사 항목이 없는 시트는 건너뛴다.
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    if (sheet === undefined) {
+      warnings.push(`시트 '${sheetName}' 를 읽지 못해 건너뛰었습니다.`);
+      continue;
+    }
+
+    const extracted = extractFromGrid(buildGrid(sheet));
+    if (extracted.records.length === 0 && extracted.itemNames.size === 0) {
+      continue;
+    }
+    collected.push({ sheetName, extracted });
   }
 
-  const grid = buildGrid(sheet);
-  return extractFromGrid(grid, sheetName);
+  if (collected.length === 0) {
+    throw new Error(`'${SPRAY_ITEM_PREFIX}' 항목이 있는 시트를 찾지 못했습니다.`);
+  }
+
+  // 주차마다 등장하는 항목이 달라도 표 모양은 같아야 비교할 수 있으므로 컬럼을 하나로 합친다.
+  const columns = sortItemColumns(new Set(collected.flatMap((item) => [...item.extracted.itemNames])));
+
+  const weeks = collected.map((item, index) => ({
+    sheetName: item.sheetName,
+    label: `${String(index + 1)}${WEEK_LABEL_SUFFIX}`,
+    rows: item.extracted.records.map((accumulator) => finalizeRecord(accumulator, columns)),
+    warnings: item.extracted.warnings,
+  }));
+
+  return { weeks, columns, warnings };
 }
 
 // ---------------------------------------------------------------------------
 // 1. 그리드 → 결과
 // ---------------------------------------------------------------------------
 
+/** 시트 하나에서 뽑아낸 것 (컬럼 확정 전 단계) */
+interface SheetExtraction {
+  records: TherapistAccumulator[];
+  itemNames: Set<string>;
+  warnings: string[];
+}
+
 /**
  * 그리드 전체를 순회하며 신장분사 항목을 수집하고 치료사별로 묶는다.
  */
-function extractFromGrid(grid: SheetGrid, sheetName: string): ParseResult {
+function extractFromGrid(grid: SheetGrid): SheetExtraction {
   const warnings: string[] = [];
 
   // '합계건수' 헤더 위치를 먼저 모두 찾아 둔다.
@@ -115,15 +148,22 @@ function extractFromGrid(grid: SheetGrid, sheetName: string): ParseResult {
   // PT 번호를 key 로 사용하여 같은 치료사가 여러 블록에 나와도 하나로 합친다.
   const therapists = new Map<string, TherapistAccumulator>();
   const itemNames = new Set<string>();
+  /** PT번호 없이 이름으로만 처리한 치료사 (경고를 한 번만 남기기 위함) */
+  const namedOnly = new Set<string>();
 
   for (const position of findSprayItemCells(grid)) {
     const itemName = normalizeText(getCell(grid, position.row, position.col));
     const bounds = resolveBlockBounds(totalHeaders, position);
 
-    const identity = findTherapistIdentity(grid, position, bounds);
+    const identity = findTherapistIdentity(grid, position, bounds, totalHeaders);
     if (identity === null) {
-      warnings.push(`${String(position.row + 1)}행 '${itemName}' 위쪽에서 PT번호를 찾지 못해 제외했습니다.`);
+      warnings.push(`${String(position.row + 1)}행 '${itemName}' 위쪽에서 치료사를 찾지 못해 제외했습니다.`);
       continue;
+    }
+    // 같은 사람의 항목마다 반복되지 않도록 치료사당 한 번만 알린다.
+    if (identity.pt === '' && !namedOnly.has(identity.therapist)) {
+      namedOnly.add(identity.therapist);
+      warnings.push(`${identity.therapist}: 시트에 PT번호가 없어 이름으로 묶었습니다.`);
     }
 
     const count = readItemCount(grid, position, bounds);
@@ -133,10 +173,7 @@ function extractFromGrid(grid: SheetGrid, sheetName: string): ParseResult {
     addItem(therapists, identity, itemName, count, warnings);
   }
 
-  const columns = sortItemColumns(itemNames);
-  const rows = [...therapists.values()].map((accumulator) => finalizeRecord(accumulator, columns));
-
-  return { sheetName, columns, rows, warnings };
+  return { records: [...therapists.values()], itemNames, warnings };
 }
 
 /**
@@ -303,7 +340,12 @@ function checkTotalMismatch(
  *
  * @returns 치료사 정보. PT 번호를 찾지 못하면 null.
  */
-function findTherapistIdentity(grid: SheetGrid, item: CellPosition, bounds: BlockBounds): TherapistIdentity | null {
+function findTherapistIdentity(
+  grid: SheetGrid,
+  item: CellPosition,
+  bounds: BlockBounds,
+  totalHeaders: readonly CellPosition[],
+): TherapistIdentity | null {
   const lowestRow = Math.max(0, item.row - MAX_PT_LOOKUP_ROWS);
   const searchEndCol = Math.min(bounds.endCol, item.col);
 
@@ -317,7 +359,46 @@ function findTherapistIdentity(grid: SheetGrid, item: CellPosition, bounds: Bloc
     return { therapist, pt: found.pt };
   }
 
-  return null;
+  // PT 번호를 빠뜨린 블록이 있어(주차마다 적는 방식이 조금씩 다르다) 이름만으로도 찾아 본다.
+  const therapist = findNameWithoutPt(grid, item, bounds, totalHeaders);
+  return therapist === '' ? null : { therapist, pt: '' };
+}
+
+/**
+ * PT 번호가 없는 블록에서 이름만 찾는다.
+ *
+ * 블록의 첫 열(이름·PT번호가 적히는 열)을 위로 훑되,
+ * 그 블록의 머리글('합계건수' 가 있는 행)을 만나면 멈춰 위 블록을 넘겨다보지 않는다.
+ * 항목명이나 '치료사' 같은 고정 라벨은 이름이 아니므로 건너뛴다.
+ */
+function findNameWithoutPt(
+  grid: SheetGrid,
+  item: CellPosition,
+  bounds: BlockBounds,
+  totalHeaders: readonly CellPosition[],
+): string {
+  for (let row = item.row - 1; row >= 0; row -= 1) {
+    const isBlockHeader = totalHeaders.some(
+      (header) => header.row === row && header.col >= bounds.startCol && header.col <= bounds.endCol,
+    );
+    if (isBlockHeader) {
+      return '';
+    }
+
+    const value = getCell(grid, row, bounds.startCol);
+    const text = normalizeText(value);
+
+    if (isBlank(value) || extractPtNumber(value) !== null) {
+      continue;
+    }
+    if (text.startsWith(SPRAY_ITEM_PREFIX) || BLOCK_LABEL_WORDS.some((word) => text.includes(word))) {
+      continue;
+    }
+
+    return toText(value);
+  }
+
+  return '';
 }
 
 /**
@@ -408,7 +489,9 @@ function addItem(
   count: number,
   warnings: string[],
 ): void {
-  let accumulator = therapists.get(identity.pt);
+  // PT 번호가 없으면 이름을 key 로 쓴다.
+  const key = identity.pt === '' ? identity.therapist : identity.pt;
+  let accumulator = therapists.get(key);
 
   if (accumulator === undefined) {
     accumulator = {
@@ -417,7 +500,7 @@ function addItem(
       items: {},
       recordedItems: new Set<string>(),
     };
-    therapists.set(identity.pt, accumulator);
+    therapists.set(key, accumulator);
   }
 
   if (accumulator.recordedItems.has(itemName)) {

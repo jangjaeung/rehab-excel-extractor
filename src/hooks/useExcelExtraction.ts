@@ -60,7 +60,7 @@ export function useExcelExtraction(): ExcelExtraction {
       const parsed = await parseExcel(file);
       setResult(parsed);
 
-      if (parsed.rows.length === 0) {
+      if (parsed.weeks.every((week) => week.rows.length === 0)) {
         setNotice('신장분사 항목을 찾지 못했습니다. 파일 내용을 확인해 주세요.');
       }
     } catch (caught) {
@@ -72,7 +72,7 @@ export function useExcelExtraction(): ExcelExtraction {
   }, [file]);
 
   const save = useCallback(async (): Promise<void> => {
-    if (result === null || result.rows.length === 0) {
+    if (result === null || result.weeks.length === 0) {
       setError('저장할 결과가 없습니다. 먼저 추출하세요.');
       return;
     }
