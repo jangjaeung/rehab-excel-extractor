@@ -133,9 +133,17 @@ function weekdayIndex(year: number, month: number, day: number): number {
 // ---------------------------------------------------------------------------
 
 /**
- * 평일(월~금) 칸을 D 로 채운다.
- * '·' 로 적힌 칸은 공휴일이거나 개인 휴무이므로 그대로 둔다.
- * 토·일은 사람마다 근무가 달라 손대지 않는다.
+ * 연차를 넣기 전에 근무 칸을 정리한다. (연차표를 항상 우선하기 위한 초기화)
+ *
+ * 평일(월~금)
+ *   '·' 는 공휴일이거나 개인 휴무이므로 그대로 두고, 나머지는 D 로 채운다.
+ *
+ * 토·일
+ *   근무 배정(D)은 근무표에서만 정하는 것이라 건드리지 않고,
+ *   **off 표기만 D 로 되돌린다.**
+ *   주말에 off 가 적혀 있다는 것은 원래 근무 배정(D)이 있었는데 쉬었다는 뜻이므로,
+ *   연차표에 그 기록이 없다면 근무한 것으로 돌려놓는 것이 맞다.
+ *   (이 정리를 안 하면 지난달 근무표의 off 가 그대로 남는다)
  */
 function fillWorkingDays(sheet: ScheduleSheet, warnings: string[]): void {
   const { year, month } = sheet;
@@ -146,16 +154,17 @@ function fillWorkingDays(sheet: ScheduleSheet, warnings: string[]): void {
   let cleared = 0;
 
   for (const [day, column] of sheet.dayColumns) {
-    if (!SCHEDULE_WORKING_WEEKDAYS.includes(weekdayIndex(year, month, day))) {
-      continue;
-    }
+    const isWeekday = SCHEDULE_WORKING_WEEKDAYS.includes(weekdayIndex(year, month, day));
 
     for (const row of sheet.nameRows.values()) {
       const current = compact(cellText(sheet.worksheet, row, column));
-      if (current === SCHEDULE_REST_MARKER) {
+      const hasOff = current.includes(SCHEDULE_OFF_MARKER);
+
+      // 평일은 '·' 만 남기고 모두 D, 주말은 off 만 D 로 되돌린다.
+      if (isWeekday ? current === SCHEDULE_REST_MARKER : !hasOff) {
         continue;
       }
-      if (current.includes(SCHEDULE_OFF_MARKER)) {
+      if (hasOff) {
         cleared += 1;
       }
       sheet.worksheet.getCell(row, column).value = SCHEDULE_WORK_MARKER;
