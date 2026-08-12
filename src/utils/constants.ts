@@ -148,6 +148,17 @@ export const AFTERNOON_KEYWORD = '오후';
 export const FULL_DAY_VALUE = 1;
 export const HALF_DAY_VALUE = 0.5;
 
+/* ----- 공휴일·휴업일 (연차표 날짜 글자색) ----- */
+
+/** 붉은 글자로 인정할 최소 빨강 값 */
+export const HOLIDAY_RED_MIN_RED = 100;
+
+/** 초록/파랑이 빨강의 몇 배 미만이어야 '붉은색' 으로 볼지 */
+export const HOLIDAY_RED_DOMINANCE = 0.5;
+
+/** 시트 제목(연·월)을 찾을 때 훑어볼 열 수 */
+export const HOLIDAY_TITLE_SCAN_COLS = 14;
+
 /** 요일 라벨 (Date 의 getUTCDay 순서) */
 export const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 

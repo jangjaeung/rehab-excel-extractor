@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { LeaveEntry, LeavePersonSummary } from '../types/leave';
 import type { ScheduleApplyResult } from '../types/schedule';
+import { readHolidayDates } from '../utils/leave/holidays';
 import { parseLeaveExcel, summarizeLeaveEntries } from '../utils/leave/parser';
 import { readSchedule } from '../utils/schedule/reader';
 import { applyLeaveToSchedule } from '../utils/schedule/writer';
@@ -93,6 +94,8 @@ export function useLeaveExtraction(): LeaveExtraction {
 
       const entries: LeaveEntry[] = [];
       const warnings: string[] = [];
+      // 공휴일·휴업일은 연차표 날짜의 붉은 글자로 표시되어 있다.
+      const holidays = new Set<string>();
 
       for (const slot of LEAVE_SLOTS) {
         const file = files[slot.id];
@@ -102,11 +105,15 @@ export function useLeaveExtraction(): LeaveExtraction {
         const parsed = await parseLeaveExcel(file, { roster: schedule.roster, department: slot.department });
         entries.push(...parsed.entries);
         warnings.push(...parsed.warnings.map((warning) => `[${slot.department}] ${warning}`));
+
+        for (const holiday of await readHolidayDates(file)) {
+          holidays.add(holiday);
+        }
       }
 
       entries.sort((a, b) => (a.isoDate === b.isoDate ? a.name.localeCompare(b.name, 'ko') : a.isoDate < b.isoDate ? -1 : 1));
 
-      const applyResult = await applyLeaveToSchedule(schedule, entries);
+      const applyResult = await applyLeaveToSchedule(schedule, entries, holidays);
       applyResult.warnings.unshift(...warnings);
 
       setResult({ entries, people: summarizeLeaveEntries(entries), schedule: applyResult });

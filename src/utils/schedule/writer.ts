@@ -36,6 +36,7 @@ const YEAR_LENGTH = 4;
 export async function applyLeaveToSchedule(
   schedule: ScheduleWorkbook,
   entries: readonly LeaveEntry[],
+  holidays: ReadonlySet<string>,
 ): Promise<ScheduleApplyResult> {
   const warnings = [...schedule.warnings];
 
@@ -52,7 +53,7 @@ export async function applyLeaveToSchedule(
 
   for (const sheet of targets) {
     fixCalendar(sheet, warnings);
-    resetToTemplate(sheet, warnings);
+    resetToTemplate(sheet, holidays, warnings);
   }
 
   const applied = entries.map((entry) => applyEntry(schedule, entry));
@@ -136,24 +137,31 @@ function weekdayIndex(year: number, month: number, day: number): number {
 /**
  * 근무 칸을 템플릿 상태로 되돌린다.
  *
- *   평일(월~금) → D
- *   토·일       → ·
+ *   평일(월~금)        → D
+ *   토·일              → ·
+ *   공휴일·휴업일      → ·   (연차표에 붉은 글자로 적힌 날)
  *
  * 근무표는 틀일 뿐이고 내용은 모두 연차표에서 나오므로,
  * 이전 달 데이터가 남아 있어도 전부 지우고 처음부터 다시 채운다.
  * 토요일 근무는 연차표의 특근 표기('[홍길동]')가 D 로 들어가면서 생긴다.
  */
-function resetToTemplate(sheet: ScheduleSheet, warnings: string[]): void {
+function resetToTemplate(sheet: ScheduleSheet, holidays: ReadonlySet<string>, warnings: string[]): void {
   const { year, month } = sheet;
   if (year === null || month === null) {
     return;
   }
 
   let cleared = 0;
+  let restDays = 0;
 
   for (const [day, column] of sheet.dayColumns) {
-    const isWeekday = SCHEDULE_WORKING_WEEKDAYS.includes(weekdayIndex(year, month, day));
+    const isHoliday = holidays.has(formatIsoDate(year, month, day));
+    const isWeekday = !isHoliday && SCHEDULE_WORKING_WEEKDAYS.includes(weekdayIndex(year, month, day));
     const template = isWeekday ? SCHEDULE_WORK_MARKER : SCHEDULE_REST_MARKER;
+
+    if (isHoliday) {
+      restDays += 1;
+    }
 
     for (const row of sheet.nameRows.values()) {
       if (compact(cellText(sheet.worksheet, row, column)).includes(SCHEDULE_OFF_MARKER)) {
@@ -168,6 +176,14 @@ function resetToTemplate(sheet: ScheduleSheet, warnings: string[]): void {
       `'${sheet.sheetName}': 원래 적혀 있던 off 표기 ${String(cleared)}건을 지우고 연차표 기준으로 다시 채웠습니다.`,
     );
   }
+  if (restDays > 0) {
+    warnings.push(`'${sheet.sheetName}': 연차표에 붉게 표시된 공휴일·휴업일 ${String(restDays)}일을 · 로 두었습니다.`);
+  }
+}
+
+/** 2026-02-09 형태로 */
+function formatIsoDate(year: number, month: number, day: number): string {
+  return `${String(year)}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 // ---------------------------------------------------------------------------
