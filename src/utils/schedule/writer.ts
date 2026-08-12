@@ -22,11 +22,12 @@ const YEAR_LENGTH = 4;
 /**
  * 연차 기록을 근무표에 반영한다.
  *
- * 순서가 중요하다.
- *   ① 날짜·요일 행을 해당 월에 맞게 고친다      (요일을 알아야 평일을 판단할 수 있다)
- *   ② 평일 칸을 D 로 채운다                     ('·' 로 적힌 휴무·공휴일은 그대로 둔다)
- *   ③ 연차 기록을 off 표기로 덮어쓴다
- *   ④ 근무표에 실제로 적힌 값을 세어 집계 열을 채운다
+ * 근무표는 틀(템플릿)일 뿐이고 내용은 모두 연차표에서 나온다.
+ * 그래서 순서가 중요하다.
+ *   ① 날짜·요일 행을 해당 월에 맞게 고친다   (요일을 알아야 평일/주말을 가른다)
+ *   ② 평일은 D, 토·일은 · 로 되돌린다        (이전 달 데이터를 모두 지운다)
+ *   ③ 연차 기록을 off / 특근(D) 표기로 넣는다
+ *   ④ 근무표에 적힌 값을 세어 집계 열을 채운다
  *
  * 쓰기에 exceljs 를 쓰는 이유:
  * xlsx(SheetJS) 로 다시 쓰면 셀 배경색 등 서식이 모두 사라진다.
@@ -51,7 +52,7 @@ export async function applyLeaveToSchedule(
 
   for (const sheet of targets) {
     fixCalendar(sheet, warnings);
-    fillWorkingDays(sheet, warnings);
+    resetToTemplate(sheet, warnings);
   }
 
   const applied = entries.map((entry) => applyEntry(schedule, entry));
@@ -133,19 +134,16 @@ function weekdayIndex(year: number, month: number, day: number): number {
 // ---------------------------------------------------------------------------
 
 /**
- * 연차를 넣기 전에 근무 칸을 정리한다. (연차표를 항상 우선하기 위한 초기화)
+ * 근무 칸을 템플릿 상태로 되돌린다.
  *
- * 평일(월~금)
- *   '·' 는 공휴일이거나 개인 휴무이므로 그대로 두고, 나머지는 D 로 채운다.
+ *   평일(월~금) → D
+ *   토·일       → ·
  *
- * 토·일
- *   근무 배정(D)은 근무표에서만 정하는 것이라 건드리지 않고,
- *   **off 표기만 D 로 되돌린다.**
- *   주말에 off 가 적혀 있다는 것은 원래 근무 배정(D)이 있었는데 쉬었다는 뜻이므로,
- *   연차표에 그 기록이 없다면 근무한 것으로 돌려놓는 것이 맞다.
- *   (이 정리를 안 하면 지난달 근무표의 off 가 그대로 남는다)
+ * 근무표는 틀일 뿐이고 내용은 모두 연차표에서 나오므로,
+ * 이전 달 데이터가 남아 있어도 전부 지우고 처음부터 다시 채운다.
+ * 토요일 근무는 연차표의 특근 표기('[홍길동]')가 D 로 들어가면서 생긴다.
  */
-function fillWorkingDays(sheet: ScheduleSheet, warnings: string[]): void {
+function resetToTemplate(sheet: ScheduleSheet, warnings: string[]): void {
   const { year, month } = sheet;
   if (year === null || month === null) {
     return;
@@ -155,25 +153,19 @@ function fillWorkingDays(sheet: ScheduleSheet, warnings: string[]): void {
 
   for (const [day, column] of sheet.dayColumns) {
     const isWeekday = SCHEDULE_WORKING_WEEKDAYS.includes(weekdayIndex(year, month, day));
+    const template = isWeekday ? SCHEDULE_WORK_MARKER : SCHEDULE_REST_MARKER;
 
     for (const row of sheet.nameRows.values()) {
-      const current = compact(cellText(sheet.worksheet, row, column));
-      const hasOff = current.includes(SCHEDULE_OFF_MARKER);
-
-      // 평일은 '·' 만 남기고 모두 D, 주말은 off 만 D 로 되돌린다.
-      if (isWeekday ? current === SCHEDULE_REST_MARKER : !hasOff) {
-        continue;
-      }
-      if (hasOff) {
+      if (compact(cellText(sheet.worksheet, row, column)).includes(SCHEDULE_OFF_MARKER)) {
         cleared += 1;
       }
-      sheet.worksheet.getCell(row, column).value = SCHEDULE_WORK_MARKER;
+      sheet.worksheet.getCell(row, column).value = template;
     }
   }
 
   if (cleared > 0) {
     warnings.push(
-      `'${sheet.sheetName}': 원래 적혀 있던 off 표기 ${String(cleared)}건을 D 로 되돌린 뒤 연차표 기준으로 다시 넣었습니다. 연차표에 없는 off 는 사라집니다.`,
+      `'${sheet.sheetName}': 원래 적혀 있던 off 표기 ${String(cleared)}건을 지우고 연차표 기준으로 다시 채웠습니다.`,
     );
   }
 }
