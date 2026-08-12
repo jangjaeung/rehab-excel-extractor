@@ -67,6 +67,6 @@ function toSheetName(original: string, fallback: string, used: Set<string>): str
  *
  * @returns 저장된 경로. 사용자가 취소하면 null.
  */
-export async function saveResultWorkbook(result: ParseResult): Promise<string | null> {
-  return saveWorkbookData(buildResultWorkbook(result), RESULT_FILE_NAME);
+export async function saveResultWorkbook(result: ParseResult, fileName = RESULT_FILE_NAME): Promise<string | null> {
+  return saveWorkbookData(buildResultWorkbook(result), fileName);
 }

@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import type { ParseResult } from '../types/excel';
-import { parseExcel } from '../utils/excel/parser';
 import { saveResultWorkbook } from '../utils/excel/exporter';
 import { isExcelFile, toErrorMessage } from '../utils/file';
 import { ACCEPTED_EXTENSIONS } from '../utils/constants';
@@ -20,11 +19,20 @@ export interface ExcelExtraction {
   save: () => Promise<void>;
 }
 
+/** 탭마다 달라지는 부분 */
+export interface ExcelExtractionOptions {
+  /** 어떤 파서를 쓸지 (신장분사 / 감염치료건수) */
+  parse: (file: File) => Promise<ParseResult>;
+  /** 저장 기본 파일명 */
+  fileName: string;
+}
+
 /**
  * 파일 선택 → 추출 → 저장까지의 화면 상태를 관리하는 훅.
  * 엑셀 관련 실제 처리는 parser / exporter 에 위임하고, 여기서는 흐름과 상태만 다룬다.
+ * 파서와 파일명만 갈아 끼우면 다른 추출 화면에도 그대로 쓸 수 있다.
  */
-export function useExcelExtraction(): ExcelExtraction {
+export function useExcelExtraction({ parse, fileName }: ExcelExtractionOptions): ExcelExtraction {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<ParseResult | null>(null);
   const [status, setStatus] = useState<ExtractionStatus>('idle');
@@ -57,7 +65,7 @@ export function useExcelExtraction(): ExcelExtraction {
     setNotice(null);
 
     try {
-      const parsed = await parseExcel(file);
+      const parsed = await parse(file);
       setResult(parsed);
 
       if (parsed.weeks.every((week) => week.rows.length === 0)) {
@@ -69,7 +77,7 @@ export function useExcelExtraction(): ExcelExtraction {
     } finally {
       setStatus('idle');
     }
-  }, [file]);
+  }, [file, parse]);
 
   const save = useCallback(async (): Promise<void> => {
     if (result === null || result.weeks.length === 0) {
@@ -82,14 +90,14 @@ export function useExcelExtraction(): ExcelExtraction {
     setNotice(null);
 
     try {
-      const savedPath = await saveResultWorkbook(result);
+      const savedPath = await saveResultWorkbook(result, fileName);
       setNotice(savedPath === null ? '저장을 취소했습니다.' : `저장 완료: ${savedPath}`);
     } catch (caught) {
       setError(toErrorMessage(caught));
     } finally {
       setStatus('idle');
     }
-  }, [result]);
+  }, [fileName, result]);
 
   return { file, result, status, error, notice, selectFile, extract, save };
 }

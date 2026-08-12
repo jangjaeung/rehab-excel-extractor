@@ -9,6 +9,24 @@ export const SPRAY_ITEM_PREFIX = '신장분사';
 /** 합계 값이 들어 있는 열을 찾기 위한 헤더 문자열 */
 export const TOTAL_COUNT_HEADER = '합계건수';
 
+/** 감염치료건수 행을 찾기 위한 라벨 */
+export const INFECTION_ROW_LABEL = '감염치료건수';
+
+/** 이름 셀 아래로 PT 번호를 찾을 때 몇 행까지 볼지 */
+export const MAX_PT_LOOKUP_BELOW_ROWS = 3;
+
+/** 블록 머리글의 날짜 칸에서 일자를 뽑는 패턴 ('1일' → 1) */
+export const DAY_LABEL_PATTERN = /^(\d{1,2})\s*일$/;
+
+/** 감염치료 결과 테이블의 합계 컬럼 이름 */
+export const INFECTION_TOTAL_COLUMN = '합계';
+
+/** 감염치료 결과 저장 파일명 */
+export const INFECTION_RESULT_FILE_NAME = '감염치료건수.xlsx';
+
+/** 감염치료 결과 시트 이름 */
+export const INFECTION_RESULT_SHEET_NAME = '감염치료건수';
+
 /** PT 번호 패턴. 'PT288', 'pt 288', 'PT-288' 등을 허용한다. */
 export const PT_NUMBER_PATTERN = /PT\s*-?\s*(\d+)/i;
 
@@ -230,6 +248,12 @@ export const TAB_ITEMS = [
     label: '신장분사 추출기',
     title: '신장분사 실적 추출기',
     description: '치료사별 신장분사 항목의 합계건수를 자동으로 추출합니다.',
+  },
+  {
+    id: 'infection',
+    label: '감염치료건수',
+    title: '감염치료건수 추출기',
+    description: '주간 현황관리판의 모든 시트를 합쳐 1일부터 말일까지 인원별 감염치료건수를 추출합니다.',
   },
   {
     id: 'leave',

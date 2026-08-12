@@ -1,5 +1,6 @@
 import { useState, type JSX } from 'react';
 import { Tabs } from './components/Tabs';
+import { InfectionTab } from './tabs/InfectionTab';
 import { LeaveTab } from './tabs/LeaveTab';
 import { SprayTab } from './tabs/SprayTab';
 import { DEFAULT_TAB_ID, TAB_ITEMS, type TabId } from './utils/constants';
@@ -27,6 +28,9 @@ export default function App(): JSX.Element {
 
       <div hidden={activeTab !== 'spray'}>
         <SprayTab />
+      </div>
+      <div hidden={activeTab !== 'infection'}>
+        <InfectionTab />
       </div>
       <div hidden={activeTab !== 'leave'}>
         <LeaveTab />

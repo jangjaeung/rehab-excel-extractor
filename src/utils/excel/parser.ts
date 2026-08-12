@@ -1,16 +1,14 @@
 import * as XLSX from 'xlsx';
-import type { CellPosition, CellValue, ParseResult, SheetGrid, TherapistRecord } from '../../types/excel';
+import type { CellPosition, ParseResult, SheetGrid, TherapistRecord } from '../../types/excel';
+import { DEFAULT_ITEM_COUNT, SPRAY_ITEM_PREFIX, TOTAL_COUNT_HEADER, WEEK_LABEL_SUFFIX } from '../constants';
 import {
-  BLOCK_LABEL_WORDS,
-  DEFAULT_ITEM_COUNT,
-  MAX_NAME_LOOKUP_ROWS,
-  MAX_PT_LOOKUP_ROWS,
-  PT_NUMBER_PATTERN,
-  SPRAY_ITEM_PREFIX,
-  TOTAL_COUNT_HEADER,
-  WEEK_LABEL_SUFFIX,
-} from '../constants';
-import { getCell, getRowLength, isBlank, normalizeText, toNumberOrNull, toText } from './cell';
+  findTherapistIdentity,
+  findTotalHeaders,
+  resolveBlockBounds,
+  type BlockBounds,
+  type TherapistIdentity,
+} from './blocks';
+import { getCell, getRowLength, isBlank, normalizeText, toNumberOrNull } from './cell';
 import { buildGrid } from './grid';
 
 /**
@@ -41,25 +39,6 @@ interface TherapistAccumulator extends TherapistRecord {
   /** 중복 항목 감지를 위해 이미 기록한 항목명 집합 */
   readonly recordedItems: Set<string>;
 }
-
-/** PT 번호 행에서 찾아낸 치료사 정보 */
-interface TherapistIdentity {
-  readonly therapist: string;
-  readonly pt: string;
-}
-
-/** 항목 셀이 속한 치료사 블록의 가로 범위 */
-interface BlockBounds {
-  /** 합계건수 열. 헤더를 찾지 못하면 null */
-  readonly totalColumn: number | null;
-  /** 블록의 왼쪽 경계 (inclusive) */
-  readonly startCol: number;
-  /** 블록의 오른쪽 경계 (inclusive) */
-  readonly endCol: number;
-}
-
-/** 오른쪽 경계를 알 수 없을 때 사용하는 값 (해당 행 끝까지) */
-const UNBOUNDED_COLUMN = Number.MAX_SAFE_INTEGER;
 
 // ---------------------------------------------------------------------------
 // 공개 API
@@ -198,68 +177,8 @@ function findSprayItemCells(grid: SheetGrid): CellPosition[] {
 }
 
 // ---------------------------------------------------------------------------
-// 3. 블록 경계 및 합계 열 탐색
+// 3. 건수 계산
 // ---------------------------------------------------------------------------
-
-/**
- * '합계건수' 헤더 셀 위치를 모두 찾는다.
- * 블록이 세로/가로로 반복되므로 목록으로 보관한다.
- */
-function findTotalHeaders(grid: SheetGrid): CellPosition[] {
-  const headers: CellPosition[] = [];
-
-  for (let row = 0; row < grid.length; row += 1) {
-    const length = getRowLength(grid, row);
-    for (let col = 0; col < length; col += 1) {
-      if (normalizeText(getCell(grid, row, col)).includes(TOTAL_COUNT_HEADER)) {
-        headers.push({ row, col });
-      }
-    }
-  }
-
-  return headers;
-}
-
-/**
- * 항목 셀이 속한 블록의 가로 범위와 합계 열을 확정한다.
- *
- * 1. 항목 행보다 위(같은 행 포함)에 있는 헤더 중, 항목의 오른쪽에 있으면서
- *    가장 가까운 헤더를 찾는다 → 그 열이 이 블록의 합계 열이자 오른쪽 경계.
- * 2. 같은 헤더 행에서 항목 왼쪽에 있는 헤더는 왼쪽 블록의 끝이므로,
- *    그 다음 열이 이 블록의 왼쪽 경계가 된다.
- */
-function resolveBlockBounds(headers: readonly CellPosition[], item: CellPosition): BlockBounds {
-  // 항목보다 위쪽 헤더를 우선 사용하고, 없으면 전체 헤더를 대상으로 한다.
-  const above = headers.filter((header) => header.row <= item.row);
-  const candidates = above.length > 0 ? above : headers;
-
-  let right: CellPosition | null = null;
-  for (const header of candidates) {
-    if (header.col <= item.col) {
-      continue;
-    }
-    // 행이 가까울수록, 같은 행이면 열이 가까울수록 우선한다.
-    const isCloser = right === null || header.row > right.row || (header.row === right.row && header.col < right.col);
-    if (isCloser) {
-      right = header;
-    }
-  }
-
-  if (right === null) {
-    // 오른쪽에서 헤더를 찾지 못한 경우 (헤더가 아예 없는 양식 등)
-    return { totalColumn: null, startCol: 0, endCol: UNBOUNDED_COLUMN };
-  }
-
-  // 같은 헤더 행에서 항목 왼쪽에 있는 헤더 = 왼쪽 블록의 오른쪽 끝
-  let leftBoundary = 0;
-  for (const header of candidates) {
-    if (header.row === right.row && header.col < item.col) {
-      leftBoundary = Math.max(leftBoundary, header.col + 1);
-    }
-  }
-
-  return { totalColumn: right.col, startCol: leftBoundary, endCol: right.col };
-}
 
 /**
  * 항목 행의 건수를 **날짜 칸 값의 합**으로 계산한다.
@@ -328,154 +247,7 @@ function checkTotalMismatch(
 }
 
 // ---------------------------------------------------------------------------
-// 4. 치료사 정보 탐색
-// ---------------------------------------------------------------------------
-
-/**
- * 항목 셀에서 위로 거슬러 올라가며 PT 번호를 찾고,
- * PT 번호 바로 위(빈 행은 건너뜀)의 이름을 치료사 이름으로 사용한다.
- *
- * 탐색은 항목이 속한 블록의 열 범위로 제한한다.
- * PT 번호는 항상 항목의 왼쪽에 있으므로 오른쪽 경계는 항목 열로 좁힌다.
- *
- * @returns 치료사 정보. PT 번호를 찾지 못하면 null.
- */
-function findTherapistIdentity(
-  grid: SheetGrid,
-  item: CellPosition,
-  bounds: BlockBounds,
-  totalHeaders: readonly CellPosition[],
-): TherapistIdentity | null {
-  const lowestRow = Math.max(0, item.row - MAX_PT_LOOKUP_ROWS);
-  const searchEndCol = Math.min(bounds.endCol, item.col);
-
-  for (let row = item.row; row >= lowestRow; row -= 1) {
-    const found = findPtNumberInRow(grid, row, bounds.startCol, searchEndCol);
-    if (found === null) {
-      continue;
-    }
-
-    const therapist = findNameAbove(grid, found.position, bounds);
-    return { therapist, pt: found.pt };
-  }
-
-  // PT 번호를 빠뜨린 블록이 있어(주차마다 적는 방식이 조금씩 다르다) 이름만으로도 찾아 본다.
-  const therapist = findNameWithoutPt(grid, item, bounds, totalHeaders);
-  return therapist === '' ? null : { therapist, pt: '' };
-}
-
-/**
- * PT 번호가 없는 블록에서 이름만 찾는다.
- *
- * 블록의 첫 열(이름·PT번호가 적히는 열)을 위로 훑되,
- * 그 블록의 머리글('합계건수' 가 있는 행)을 만나면 멈춰 위 블록을 넘겨다보지 않는다.
- * 항목명이나 '치료사' 같은 고정 라벨은 이름이 아니므로 건너뛴다.
- */
-function findNameWithoutPt(
-  grid: SheetGrid,
-  item: CellPosition,
-  bounds: BlockBounds,
-  totalHeaders: readonly CellPosition[],
-): string {
-  for (let row = item.row - 1; row >= 0; row -= 1) {
-    const isBlockHeader = totalHeaders.some(
-      (header) => header.row === row && header.col >= bounds.startCol && header.col <= bounds.endCol,
-    );
-    if (isBlockHeader) {
-      return '';
-    }
-
-    const value = getCell(grid, row, bounds.startCol);
-    const text = normalizeText(value);
-
-    if (isBlank(value) || extractPtNumber(value) !== null) {
-      continue;
-    }
-    if (text.startsWith(SPRAY_ITEM_PREFIX) || BLOCK_LABEL_WORDS.some((word) => text.includes(word))) {
-      continue;
-    }
-
-    return toText(value);
-  }
-
-  return '';
-}
-
-/**
- * 한 행의 [startCol, endCol] 구간에서 PT 번호 셀을 찾는다.
- * 항목에서 가장 가까운 PT 번호를 쓰기 위해 오른쪽부터 탐색한다.
- */
-function findPtNumberInRow(
-  grid: SheetGrid,
-  row: number,
-  startCol: number,
-  endCol: number,
-): { pt: string; position: CellPosition } | null {
-  const lastCol = Math.min(endCol, getRowLength(grid, row) - 1);
-
-  for (let col = lastCol; col >= startCol; col -= 1) {
-    const pt = extractPtNumber(getCell(grid, row, col));
-    if (pt !== null) {
-      return { pt, position: { row, col } };
-    }
-  }
-
-  return null;
-}
-
-/**
- * 셀에서 PT 번호를 추출하여 'PT288' 형태로 정규화한다.
- * 'pt 288', 'PT-288' 등도 같은 값으로 취급하여 중복 집계를 막는다.
- * 'PT팀장', 'PT부팀장' 처럼 숫자가 없는 셀은 PT 번호가 아니다.
- */
-function extractPtNumber(value: CellValue): string | null {
-  const match = PT_NUMBER_PATTERN.exec(normalizeText(value));
-  if (match === null) {
-    return null;
-  }
-  const digits = match[1];
-  return digits === undefined ? null : `PT${digits}`;
-}
-
-/**
- * PT 번호 셀의 바로 위 행부터 위로 올라가며 이름 셀을 찾는다.
- * 이름은 PT 번호와 같은 열에 있는 경우가 대부분이므로 같은 열을 우선 확인하고,
- * 없으면 같은 블록 범위 안에서 이름으로 볼 수 있는 첫 셀을 사용한다.
- */
-function findNameAbove(grid: SheetGrid, ptPosition: CellPosition, bounds: BlockBounds): string {
-  const highestRow = Math.max(0, ptPosition.row - MAX_NAME_LOOKUP_ROWS);
-
-  for (let row = ptPosition.row - 1; row >= highestRow; row -= 1) {
-    const sameColumnValue = getCell(grid, row, ptPosition.col);
-    if (isNameCandidate(sameColumnValue)) {
-      return toText(sameColumnValue);
-    }
-
-    const lastCol = Math.min(bounds.endCol, getRowLength(grid, row) - 1);
-    for (let col = bounds.startCol; col <= lastCol; col += 1) {
-      const value = getCell(grid, row, col);
-      if (isNameCandidate(value)) {
-        return toText(value);
-      }
-    }
-  }
-
-  return '';
-}
-
-/** 이름 후보 셀인지 판단한다. 빈 셀 / 숫자 / PT 번호는 이름이 아니다. */
-function isNameCandidate(value: CellValue): boolean {
-  if (isBlank(value)) {
-    return false;
-  }
-  if (toNumberOrNull(value) !== null) {
-    return false;
-  }
-  return extractPtNumber(value) === null;
-}
-
-// ---------------------------------------------------------------------------
-// 5. 결과 조립
+// 4. 결과 조립
 // ---------------------------------------------------------------------------
 
 /**
