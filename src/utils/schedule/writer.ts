@@ -3,6 +3,7 @@ import type { AppliedCell, ApplyStatus, ScheduleApplyResult, ScheduleSheetInfo }
 import {
   FAMILY_EVENT_KEYWORD,
   PUBLIC_LEAVE_KEYWORD,
+  SATURDAY_LABEL,
   SCHEDULE_FULL_UNIT,
   SCHEDULE_HALF_UNIT,
   SCHEDULE_OFF_MARKER,
@@ -250,13 +251,13 @@ function resolveStatus(previous: string, marker: string): ApplyStatus {
 
 /**
  * 기록 → 근무표에 넣을 표기.
- *   연차 종일 off        연차 오후 → 오후 off
- *   공가 종일 공가 off    공가 오후 → 오후 공가 off
- *   특근      특근
+ *   연차 종일 → off        연차 오후 → 오후 off
+ *   공가 종일 → 공가 off    공가 오후 → 오후 공가 off
+ *   특근      → D          (쉬는 것이 아니라 근무이므로 근무 표시를 넣는다)
  */
 function markerFor(entry: LeaveEntry): string {
   if (entry.kind === SPECIAL_DUTY_KEYWORD) {
-    return SPECIAL_DUTY_KEYWORD;
+    return SCHEDULE_WORK_MARKER;
   }
 
   // 오전/오후가 안 적힌 반차는 종일과 구분할 수 없으므로 종일로 넣고 경고로 남긴다.
@@ -280,17 +281,28 @@ function markerFor(entry: LeaveEntry): string {
  *   월차연차 = 공가·경조를 뺀 off 만.       특근은 어느 쪽에도 넣지 않는다
  */
 function fillCountColumns(sheet: ScheduleSheet, warnings: string[]): void {
-  if (sheet.offColumn === null && sheet.leaveColumn === null) {
-    warnings.push(`'${sheet.sheetName}' 에 '오프' / '월차연차' 열이 없어 집계를 채우지 않았습니다.`);
+  if (sheet.offColumn === null && sheet.leaveColumn === null && sheet.saturdayColumn === null) {
+    warnings.push(`'${sheet.sheetName}' 에 집계 열('오프' 등)이 없어 집계를 채우지 않았습니다.`);
     return;
   }
+
+  const saturday = WEEKDAY_LABELS.indexOf(SATURDAY_LABEL);
 
   for (const row of sheet.nameRows.values()) {
     let offTotal = 0;
     let leaveTotal = 0;
+    let saturdayTotal = 0;
 
-    for (const column of sheet.dayColumns.values()) {
+    for (const [day, column] of sheet.dayColumns) {
       const value = compact(cellText(sheet.worksheet, row, column));
+
+      // 토요일 근무는 토요일 칸에 근무 표시(D)가 있는 것만 센다.
+      const isSaturday =
+        sheet.year !== null && sheet.month !== null && weekdayIndex(sheet.year, sheet.month, day) === saturday;
+      if (isSaturday && value === SCHEDULE_WORK_MARKER) {
+        saturdayTotal += SCHEDULE_FULL_UNIT;
+      }
+
       if (!value.includes(SCHEDULE_OFF_MARKER)) {
         continue;
       }
@@ -308,6 +320,10 @@ function fillCountColumns(sheet: ScheduleSheet, warnings: string[]): void {
     }
     if (sheet.leaveColumn !== null) {
       sheet.worksheet.getCell(row, sheet.leaveColumn).value = leaveTotal;
+    }
+    // 근무가 없으면 '·' 대신 0 이 들어간다.
+    if (sheet.saturdayColumn !== null) {
+      sheet.worksheet.getCell(row, sheet.saturdayColumn).value = saturdayTotal;
     }
   }
 }

@@ -210,6 +210,10 @@ export const SCHEDULE_PLAIN_VALUES = ['', 'D', '·', '.', '-'];
 /** 집계 컬럼 머리글 (공백을 없앤 형태로 비교한다) */
 export const SCHEDULE_OFF_COUNT_HEADER = '오프';
 export const SCHEDULE_LEAVE_COUNT_HEADER = '월차연차';
+export const SCHEDULE_SATURDAY_COUNT_HEADER = '토요일근무';
+
+/** 토요일 요일 라벨 (요일 번호는 WEEKDAY_LABELS 에서 찾아 쓴다) */
+export const SATURDAY_LABEL = '토';
 
 /** 반차 한 건이 차지하는 일수 */
 export const SCHEDULE_HALF_UNIT = 0.5;

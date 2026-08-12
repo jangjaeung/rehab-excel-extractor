@@ -8,6 +8,7 @@ import {
   SCHEDULE_LEAVE_COUNT_HEADER,
   SCHEDULE_MONTH_PATTERN,
   SCHEDULE_OFF_COUNT_HEADER,
+  SCHEDULE_SATURDAY_COUNT_HEADER,
   SCHEDULE_NAME_GAP_LIMIT,
   SCHEDULE_NON_NAME_LABELS,
   SCHEDULE_YEAR_PATTERN,
@@ -60,6 +61,8 @@ export interface ScheduleSheet {
   offColumn: number | null;
   /** '월차연차' 집계 열 */
   leaveColumn: number | null;
+  /** '토요일근무' 집계 열 */
+  saturdayColumn: number | null;
 }
 
 /** 근무표 파일 전체 */
@@ -126,6 +129,7 @@ function analyzeSheet(worksheet: ExcelJS.Worksheet): ScheduleSheet | null {
     nameRows: findNameRows(worksheet, header),
     offColumn: findLabeledColumn(worksheet, header, SCHEDULE_OFF_COUNT_HEADER),
     leaveColumn: findLabeledColumn(worksheet, header, SCHEDULE_LEAVE_COUNT_HEADER),
+    saturdayColumn: findLabeledColumn(worksheet, header, SCHEDULE_SATURDAY_COUNT_HEADER),
   };
 }
 
