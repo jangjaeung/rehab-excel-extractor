@@ -1,52 +1,73 @@
-# 신장분사 실적 추출기
+# 재활치료부 엑셀 추출기
 
-병원 치료 실적 엑셀에서 **치료사별 「신장분사」 항목의 합계건수**를 자동으로 추출하는 Electron 데스크톱 프로그램입니다.
+병원에서 매달 쓰는 엑셀 양식을 읽어 실적·연차를 뽑고, 근무표를 자동으로 채워 주는 **웹 앱**입니다.
+
+| 탭 | 하는 일 |
+|---|---|
+| 신장분사 추출기 | 「주간 환자치료 타임 현황관리판」에서 치료사별 신장분사 건수를 **주차별로** 추출 |
+| 감염치료건수 | 같은 파일의 모든 시트를 합쳐 **1일~말일** 인원별 감염치료건수를 추출 |
+| 연차 추출기 | OT/PT 연차표를 읽어 **근무표를 자동으로 채움** (off·공가·경조·특근, 집계 열까지) |
 
 매달 양식에서 **날짜 개수 · 날짜 컬럼 위치 · 전체 컬럼 수**가 달라져도 동작하도록,
 셀 주소(A1, B3)나 고정 컬럼 번호를 전혀 사용하지 않고 **셀의 내용만으로 탐색**합니다.
+
+**엑셀 파일은 서버로 전송되지 않습니다.** 모든 처리는 브라우저 안에서 이뤄지고,
+결과는 브라우저 다운로드로 내려받습니다.
 
 ---
 
 ## 1. 프로젝트 구조
 
 ```
-d:\toy
-├─ electron/                     # 메인 프로세스 (Node 측)
-│  ├─ main.ts                    # 윈도우 생성, 저장 다이얼로그 + 파일 쓰기 IPC 처리
-│  ├─ preload.ts                 # contextBridge 로 window.electronAPI 노출
-│  └─ ipc.ts                     # IPC 채널명/페이로드 타입 공유 정의
-│
-├─ src/                          # 렌더러 (React 측)
+.
+├─ src/
 │  ├─ components/                # 순수 UI 컴포넌트 (로직 없음)
-│  │  ├─ FileDropZone.tsx        # [엑셀 파일 선택] 버튼 + Drag & Drop + 파일명 표시
-│  │  ├─ ResultTable.tsx         # 결과 테이블 (컬럼은 파서가 준 순서를 그대로 사용)
-│  │  ├─ MessageBar.tsx          # 오류/안내 메시지 한 줄 표시
-│  │  └─ WarningList.tsx         # 파싱 중 발생한 비치명적 경고 목록
+│  │  ├─ FileDropZone.tsx        # 파일 선택 버튼 + Drag & Drop
+│  │  ├─ Tabs.tsx                # 상단 탭 바
+│  │  ├─ ResultTable.tsx         # 이름/PT번호 + 항목 컬럼 테이블
+│  │  ├─ LeavePersonTable.tsx    # 연차 인원별 요약
+│  │  ├─ LeaveEntryTable.tsx     # 연차 사용 내역
+│  │  ├─ ScheduleApplyTable.tsx  # 근무표 반영 결과
+│  │  ├─ MessageBar.tsx          # 오류/안내 한 줄
+│  │  └─ WarningList.tsx         # 확인이 필요한 항목 목록
+│  │
+│  ├─ tabs/                      # 탭 화면 (훅 + 컴포넌트 조립)
+│  │  ├─ SprayTab.tsx
+│  │  ├─ InfectionTab.tsx
+│  │  └─ LeaveTab.tsx
 │  │
 │  ├─ hooks/
-│  │  └─ useExcelExtraction.ts   # 파일선택 → 추출 → 저장 흐름과 화면 상태 관리
+│  │  ├─ useExcelExtraction.ts   # 파일선택 → 추출 → 저장 (신장분사·감염치료 공용)
+│  │  └─ useLeaveExtraction.ts   # 연차표 3종 업로드 → 근무표 반영 → 저장
 │  │
 │  ├─ utils/
-│  │  ├─ constants.ts            # '신장분사', '합계건수', PT 정규식 등 모든 상수
+│  │  ├─ constants.ts            # 판정 기준 문자열·패턴을 모두 모아 둔 곳
 │  │  ├─ file.ts                 # 확장자 검증, 에러 메시지 변환
-│  │  └─ excel/
-│  │     ├─ parser.ts            # ★ 엑셀 파싱 전담 (핵심 로직)
-│  │     ├─ cell.ts              # 셀 값/그리드 접근 저수준 헬퍼
-│  │     └─ exporter.ts          # 결과 → 결과.xlsx 생성 및 저장
+│  │  ├─ excel/
+│  │  │  ├─ grid.ts              # 시트 → 2차원 배열
+│  │  │  ├─ cell.ts              # 셀 값 접근 저수준 헬퍼
+│  │  │  ├─ blocks.ts            # ★ 치료사 블록 탐색 (신장분사·감염치료 공용)
+│  │  │  ├─ parser.ts            # ★ 신장분사 파서
+│  │  │  ├─ exporter.ts          # 결과 → xlsx 생성
+│  │  │  └─ save.ts              # 브라우저 다운로드
+│  │  ├─ infection/parser.ts     # ★ 감염치료건수 파서
+│  │  ├─ leave/
+│  │  │  ├─ parser.ts            # ★ 연차표 파서
+│  │  │  └─ holidays.ts          # 연차표의 붉은 날짜 → 공휴일·휴업일
+│  │  └─ schedule/
+│  │     ├─ reader.ts            # 근무표 구조 분석 (날짜/성명/집계 열)
+│  │     └─ writer.ts            # ★ 근무표 채우기 (서식 보존)
 │  │
-│  ├─ types/
-│  │  ├─ excel.ts                # CellValue, SheetGrid, TherapistRecord, ParseResult
-│  │  └─ electron.d.ts           # window.electronAPI 타입 선언
-│  │
-│  ├─ App.tsx                    # 화면 배치
-│  ├─ main.tsx                   # React 진입점
+│  ├─ types/                     # excel.ts, leave.ts, schedule.ts
+│  ├─ App.tsx                    # 탭 셸
+│  ├─ main.tsx
 │  └─ styles.css
 │
 ├─ index.html
 ├─ vite.config.ts
-├─ tsconfig.json                 # 렌더러용 (strict + noUncheckedIndexedAccess)
-├─ tsconfig.electron.json        # 메인 프로세스용
-├─ eslint.config.mjs             # ESLint flat config (typescript-eslint strictTypeChecked)
+├─ vercel.json                   # Vercel 배포 설정
+├─ tsconfig.json                 # strict + noUncheckedIndexedAccess
+├─ eslint.config.mjs             # typescript-eslint strictTypeChecked
 └─ package.json
 ```
 
@@ -55,10 +76,20 @@ d:\toy
 | 레이어 | 책임 | 엑셀을 아는가 |
 |---|---|---|
 | `components/` | 화면 표시, 사용자 입력 | ✕ |
-| `hooks/` | 상태 전이(로딩/에러/결과) | ✕ (parser 호출만) |
-| `utils/excel/` | 파싱·변환·저장 | ○ |
+| `tabs/` | 화면 조립 | ✕ |
+| `hooks/` | 상태 전이(로딩/에러/결과) | ✕ (파서 호출만) |
+| `utils/` | 파싱·변환·저장 | ○ |
 
-UI 는 `parseExcel(file)` 과 `saveResultWorkbook(result)` 두 함수만 호출합니다.
+**엑셀 라이브러리를 둘 쓰는 이유**
+
+| 용도 | 라이브러리 |
+|---|---|
+| 읽기 · 새 파일 만들기 | `xlsx` (SheetJS) |
+| **근무표 수정** | `exceljs` |
+
+근무표는 그대로 인쇄해 쓰는 문서라 원본 서식을 유지해야 하는데,
+SheetJS 로 다시 쓰면 셀 배경색 등이 모두 사라집니다. 그래서 근무표 쓰기에만 exceljs 를 씁니다.
+연차표의 붉은 날짜(공휴일)를 읽을 때도 글자색이 필요해 exceljs 를 사용합니다.
 
 ---
 
@@ -67,78 +98,73 @@ UI 는 `parseExcel(file)` 과 `saveResultWorkbook(result)` 두 함수만 호출�
 ### 설치
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### 개발 모드 (HMR)
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
-Vite 개발 서버(5173)가 뜬 뒤 Electron 창이 자동으로 열립니다.
+http://localhost:5173 이 열립니다.
 
-### 프로덕션 실행
+### 프로덕션 빌드
 
 ```bash
-npm start          # 빌드 후 Electron 실행
+pnpm build
 ```
 
-### 설치 파일 생성
+`dist/` 에 정적 파일이 생성됩니다. 타입 검사(`tsc --noEmit`)를 먼저 돌리므로 타입 오류가 있으면 빌드가 실패합니다.
+
+빌드 결과를 로컬에서 확인하려면:
 
 ```bash
-npm run package    # release/ 폴더에 Windows 설치 파일 생성
+pnpm preview
 ```
-
-생성물: `release\StretchSprayExtractor Setup 1.0.0.exe` (약 85MB, 사용자 단위 설치)
-설치 없이 바로 쓰려면 `release\win-unpacked\StretchSprayExtractor.exe` 를 실행하면 됩니다.
-(무설치판은 **폴더째** 옮겨야 합니다. exe 하나만 복사하면 실행되지 않습니다.)
-
-> **코드 서명 도구(winCodeSign) 심볼릭 링크 문제는 자동으로 처리됩니다**
->
-> electron-builder 는 설치 파일을 만들기 직전에 `winCodeSign` 압축을 푸는데,
-> 그 안에 **macOS 전용 심볼릭 링크**(`darwin/.../libcrypto.dylib`)가 들어 있습니다.
-> Windows 에서 심볼릭 링크를 만들려면 관리자 권한이나 개발자 모드가 필요해서 아래 오류로 멈춥니다.
->
-> ```
-> ⨯ cannot execute  cause=exit status 2
-> ERROR: Cannot create symbolic link : 클라이언트가 필요한 권한을 가지고 있지 않습니다.
-> ```
->
-> 이때 `release\win-unpacked` 까지만 만들어지고 **설치 파일은 나오지 않습니다.**
->
-> 그래서 `package` 스크립트가 [scripts/prepare-wincodesign.mjs](scripts/prepare-wincodesign.mjs) 를 먼저 실행합니다.
-> Windows 빌드에 `darwin` 폴더는 필요 없으므로 그 폴더만 빼고 캐시에 미리 풀어 두고,
-> electron-builder 는 '이미 있다' 고 보고 압축 해제 단계를 건너뜁니다.
->
-> * 관리자 권한이 필요 없습니다.
-> * 캐시가 이미 준비돼 있으면 아무 일도 하지 않으므로 매번 실행해도 됩니다.
-> * 새 PC 에서도 `pnpm install` 후 `pnpm package` 만 하면 됩니다.
-> * Windows 가 아니면 그냥 건너뜁니다.
 
 ### 기타 스크립트
 
 | 명령 | 설명 |
 |---|---|
-| `npm run typecheck` | 타입 검사만 수행 (strict) |
-| `npm run lint` | ESLint 검사 (경고 0건 강제) |
-| `npm run build` | typecheck → 렌더러 빌드 → 메인 프로세스 빌드 |
-
-### 사용 순서
-
-1. **[엑셀 파일 선택]** 버튼을 누르거나, 점선 영역에 파일을 **끌어다 놓습니다.**
-2. **[추출하기]** 를 누르면 아래에 결과 테이블이 표시됩니다.
-3. **[엑셀 저장]** 을 누르면 저장 위치를 물어본 뒤 `결과.xlsx` 로 저장합니다.
-
-> **문제 해결** — Electron 이 즉시 종료되며 `Cannot read properties of undefined (reading 'whenReady')`
-> 오류가 나면, 터미널에 `ELECTRON_RUN_AS_NODE` 환경변수가 설정되어 있는 경우입니다(일부 IDE 내장 터미널).
-> 해당 변수를 제거한 뒤 다시 실행하세요.
+| `pnpm typecheck` | 타입 검사만 수행 (strict) |
+| `pnpm lint` | ESLint 검사 (경고 0건 강제) |
 
 ---
 
-## 3. 주요 로직 설명
+## 3. 배포 (Vercel)
 
-### 3.1 왜 셀 주소를 쓰지 않는가
+정적 사이트라 별도 서버가 없습니다. 저장소를 연결하면 그대로 빌드됩니다.
+
+**① 대시보드에서 연결**
+
+1. https://vercel.com/new 에서 이 저장소를 import
+2. Framework Preset 은 자동으로 **Vite** 로 잡힙니다 ([vercel.json](vercel.json) 에도 명시되어 있습니다)
+3. Build Command `npm run build` · Output Directory `dist` · 환경 변수 없음
+4. Deploy
+
+**② CLI 로 배포**
+
+```bash
+npx vercel
+```
+
+```bash
+npx vercel --prod
+```
+
+> 서버 코드도 API 라우트도 없고 외부로 데이터를 보내지 않으므로, 설정할 환경 변수가 없습니다.
+> 라우팅이 없는 단일 페이지라 rewrite 규칙도 필요 없습니다.
+
+### 사용 순서
+
+1. 탭을 고르고 **[파일 선택]** 을 누르거나 점선 영역에 파일을 **끌어다 놓습니다.**
+2. **[추출하기]** 를 누르면 결과 테이블이 표시됩니다.
+3. **[엑셀 저장]** / **[근무표 저장]** 을 누르면 브라우저 다운로드 폴더로 내려받습니다.
+
+## 4. 주요 로직 설명
+
+### 4.1 왜 셀 주소를 쓰지 않는가
 
 매달 날짜 개수가 달라지면 `합계건수` 열의 위치가 통째로 이동합니다.
 따라서 모든 위치 정보를 **셀에 적힌 글자**로부터 역산합니다.
@@ -152,7 +178,7 @@ npm run package    # release/ 폴더에 Windows 설치 파일 생성
 | PT 번호 | 셀 내용이 `PT\s*-?\s*숫자` 패턴과 일치 (`PT팀장` 처럼 숫자가 없으면 제외) |
 | 치료사 이름 | PT 번호 셀의 **바로 위 행**의 이름 셀 |
 
-### 3.2 블록이 좌우로도 반복되는 구조
+### 4.2 블록이 좌우로도 반복되는 구조
 
 실제 양식은 치료사 블록이 위아래로만이 아니라 **좌우로 나란히** 배치됩니다.
 
@@ -182,7 +208,7 @@ npm run package    # release/ 폴더에 Windows 설치 파일 생성
 PT번호·이름 탐색과 합계 대체값 탐색이 모두 이 범위 안에서만 이뤄집니다.
 블록이 좌우로 3개, 4개로 늘어나도 헤더 개수만큼 자동으로 나뉩니다.
 
-### 3.3 전체 흐름
+### 4.3 전체 흐름
 
 ```
 File
@@ -201,32 +227,26 @@ File
                          └─ finalizeRecord()  빠진 항목은 0 으로 채움
 ```
 
-### 3.4 상태 관리 (`useExcelExtraction`)
+### 4.4 상태 관리 (`useExcelExtraction`)
 
 * `file` / `result` / `status` / `error` / `notice` 5개 상태만 관리합니다.
 * 새 파일을 선택하면 이전 결과를 즉시 비워 **낡은 결과가 남아 있는 상황**을 막습니다.
 * `status` 가 `idle` 이 아닌 동안 모든 버튼과 드롭존이 비활성화됩니다.
 
-### 3.5 저장 (`exporter.ts` + IPC)
-
-렌더러에는 `fs` 접근 권한이 없습니다(`contextIsolation: true`, `nodeIntegration: false`).
+### 4.5 저장
 
 ```
-렌더러 : buildResultWorkbook() → Uint8Array
-       → window.electronAPI.saveExcel({ defaultFileName: '결과.xlsx', data })
-메인   : dialog.showSaveDialog() → fs.writeFile()
-       → { saved, filePath } 반환
+buildResultWorkbook() → Uint8Array → Blob → 브라우저 다운로드
 ```
 
-* 저장되는 엑셀의 컬럼 순서는 화면 테이블과 **완전히 동일**합니다(같은 `result.columns` 사용).
+* 저장되는 엑셀의 컬럼 순서는 화면 테이블과 **완전히 동일**합니다(같은 `columns` 사용).
+* 신장분사는 **주차마다 시트를 하나씩** 만들고 원본 시트 이름을 그대로 씁니다.
+* 근무표는 원본을 exceljs 로 열어 값만 바꾸므로 **서식이 그대로 유지**됩니다.
 * xlsx 는 UTF-8 XML 을 사용하므로 한글이 깨지지 않습니다.
-* Electron 없이 브라우저에서 열었을 때는 자동으로 Blob 다운로드로 대체됩니다.
 
----
+## 5. `parser.ts` 상세 설명
 
-## 4. `parser.ts` 상세 설명
-
-### 4.1 공개 API
+### 5.1 공개 API
 
 ```ts
 parseExcel(file: File): Promise<ParseResult>      // UI 가 호출하는 유일한 함수
@@ -254,7 +274,7 @@ interface TherapistRecord {
 }
 ```
 
-### 4.2 내부 함수
+### 5.2 내부 함수
 
 #### `buildGrid(sheet)`
 `sheet_to_json` 대신 `!ref` 범위를 직접 순회해 2차원 배열을 만듭니다.
@@ -332,7 +352,7 @@ PT211 '신장분사B20': 시트의 합계건수(3)와 날짜 합계(0)가 다릅
 확정된 컬럼 목록을 기준으로 누락된 항목을 모두 `0` 으로 채웁니다.
 따라서 **모든 행이 동일한 키 집합**을 갖게 되어 테이블과 엑셀 출력이 어긋나지 않습니다.
 
-### 4.3 예외 처리 요약
+### 5.3 예외 처리 요약
 
 | 상황 | 처리 |
 |---|---|
@@ -351,7 +371,7 @@ PT211 '신장분사B20': 시트의 합계건수(3)와 날짜 합계(0)가 다릅
 | 블록이 좌우로 나란함 | `합계건수` 헤더로 블록 열 범위를 나눠 각각 독립 처리 |
 | 시트/데이터 없음 | 명확한 한글 오류 메시지 |
 
-### 4.4 검증 결과
+### 5.4 검증 결과
 
 실제 양식(`주간 환자치료 타임 현황관리판`)과 동일하게 **좌우 2열 × 위아래 3줄 = 6개 블록**을
 배치한 샘플 시트로 확인했습니다.
@@ -381,7 +401,7 @@ warnings:
 
 ---
 
-## 5. 코드 품질
+## 6. 코드 품질
 
 * **TypeScript strict** + `noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride`
 * **ESLint** `typescript-eslint/strictTypeChecked` + react-hooks (`--max-warnings 0`)

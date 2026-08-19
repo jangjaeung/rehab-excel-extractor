@@ -281,3 +281,36 @@ Electron 이 Node 모드로 뜨면서 즉시 종료됩니다. 해당 변수 제�
 5. **코드 서명 미적용** — 서명이 없어 설치 시 SmartScreen 경고가 뜹니다.
 6. `xlsx` 는 npm 레지스트리 기준 `0.18.5` 가 마지막입니다.
    최신이 필요하면 SheetJS 공식 CDN(`npm i https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`)을 사용해야 합니다.
+
+---
+
+## 10. 웹으로 전환 (`web` 브랜치)
+
+데스크톱 앱으로 배포하려면 PC마다 설치 파일을 돌려야 하고, 코드 서명이 없어
+설치할 때마다 SmartScreen 경고가 떴습니다. 브라우저에서 바로 쓰도록 Electron 을 걷어냈습니다.
+
+**걷어낸 것**
+
+* `electron/` (main · preload · ipc), `tsconfig.electron.json`
+* `src/types/electron.d.ts`
+* `scripts/prepare-wincodesign.mjs` — 코드 서명 도구 캐시 문제를 우회하던 스크립트
+* devDependencies: `electron`, `electron-builder`, `concurrently`, `cross-env`, `wait-on`
+
+**바뀐 것**
+
+* 저장 — IPC 경유 네이티브 다이얼로그를 없애고 Blob 다운로드만 남겼습니다.
+  원래도 브라우저 폴백이 있어서 [save.ts](src/utils/excel/save.ts) 한 파일만 정리하면 됐습니다.
+* `vite.config.ts` — `base: './'` (Electron 이 `file://` 로 열기 때문에 필요했던 설정) 제거.
+  Vercel 은 `/` 기준이라 절대 경로가 맞습니다.
+* [vercel.json](vercel.json) 추가 — framework `vite`, output `dist`.
+
+**그대로인 것**
+
+파서·근무표 쓰기 로직은 손대지 않았습니다. 원래 렌더러(브라우저) 쪽에서 전부 처리하고
+메인 프로세스는 파일 쓰기만 했기 때문입니다. 세 탭 모두 같은 결과를 확인했습니다.
+
+| 탭 | 결과 |
+|---|---|
+| 신장분사 | 주차 5개 · 항목 6개 |
+| 감염치료건수 | 18명 · 1일~31일 |
+| 연차 | 272건 · 근무표 반영 185건 |

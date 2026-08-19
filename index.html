@@ -4,14 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      로컬 리소스만 사용하는 오프라인 앱이므로 외부 네트워크 로드를 전면 차단한다.
-      ('unsafe-inline' 은 Vite 개발 서버가 삽입하는 HMR 프리앰블 때문에 필요하다.)
+      엑셀 파일은 모두 브라우저 안에서만 처리하고 서버로 보내지 않는다.
+      그래서 외부 리소스 로드를 막아 둔다.
+      ('unsafe-inline' 과 ws:// 는 Vite 개발 서버의 HMR 때문에 필요하다.)
     -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:5173;"
     />
-    <title>신장분사 실적 추출기</title>
+    <title>재활치료부 엑셀 추출기</title>
   </head>
   <body>
     <div id="root"></div>
