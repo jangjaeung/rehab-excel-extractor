@@ -350,3 +350,47 @@ body {
   font-size: 13px;
   word-break: break-all;
 }
+
+/* ----- 복사 버튼 ----- */
+.result__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.result__head .result__title {
+  flex: 1;
+}
+
+.copy-button {
+  flex: none;
+  padding: 5px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.copy-button:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.copy-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.copy-button--done {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.copy-button--failed {
+  border-color: var(--color-error);
+  color: var(--color-error);
+  font-weight: 600;
+}

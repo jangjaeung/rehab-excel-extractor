@@ -310,3 +310,17 @@ export const NAME_ORDER_HINT =
 
 /** 입력 상자 높이 (줄 수) */
 export const NAME_ORDER_ROWS = 4;
+
+/* ----- 복사하기 ----- */
+
+/** 엑셀 붙여넣기 형식 (탭 = 옆 칸, 줄바꿈 = 아래 칸) */
+export const CLIPBOARD_COLUMN_SEPARATOR = '\t';
+export const CLIPBOARD_ROW_SEPARATOR = '\r\n';
+
+/** 복사 버튼 문구 */
+export const COPY_BUTTON_LABEL = '값 복사';
+export const COPY_BUTTON_DONE = '복사됨';
+export const COPY_BUTTON_FAILED = '복사 실패';
+
+/** 복사 결과 문구를 몇 밀리초 동안 보여 줄지 */
+export const COPY_FEEDBACK_MS = 1800;

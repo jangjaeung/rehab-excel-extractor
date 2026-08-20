@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { CopyValuesButton } from '../components/CopyValuesButton';
 import { FileDropZone } from '../components/FileDropZone';
 import { MessageBar } from '../components/MessageBar';
 import { NameOrderInput } from '../components/NameOrderInput';
@@ -71,9 +72,12 @@ export function SprayTab(): JSX.Element {
 
           {result.weeks.map((week) => (
             <div key={week.sheetName}>
-              <h2 className="result__title">
-                {week.label} <span className="result__subtitle">{week.sheetName} · 치료사 {week.rows.length}명</span>
-              </h2>
+              <div className="result__head">
+                <h2 className="result__title">
+                  {week.label} <span className="result__subtitle">{week.sheetName} · 치료사 {week.rows.length}명</span>
+                </h2>
+                <CopyValuesButton columns={result.columns} rows={week.rows} />
+              </div>
               <WarningList warnings={week.warnings} />
               <ResultTable columns={result.columns} rows={week.rows} />
             </div>
