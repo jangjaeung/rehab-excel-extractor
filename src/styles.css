@@ -358,7 +358,8 @@ body {
   gap: 12px;
 }
 
-.result__head .result__title {
+/* 제목이든 요약이든 첫 요소가 남는 자리를 차지하고, 버튼은 오른쪽 끝에 붙는다. */
+.result__head > :first-child {
   flex: 1;
 }
 

@@ -1,4 +1,5 @@
 import { useMemo, type JSX } from 'react';
+import { CopyValuesButton } from '../components/CopyValuesButton';
 import { FileDropZone } from '../components/FileDropZone';
 import { MessageBar } from '../components/MessageBar';
 import { NameOrderInput } from '../components/NameOrderInput';
@@ -6,7 +7,7 @@ import { ResultTable } from '../components/ResultTable';
 import { WarningList } from '../components/WarningList';
 import { useExcelExtraction } from '../hooks/useExcelExtraction';
 import { parseInfectionExcel } from '../utils/infection/parser';
-import { INFECTION_RESULT_FILE_NAME } from '../utils/constants';
+import { INFECTION_RESULT_FILE_NAME, INFECTION_TOTAL_COLUMN } from '../utils/constants';
 
 /**
  * 감염치료건수 탭.
@@ -38,6 +39,15 @@ export function InfectionTab(): JSX.Element {
 
   const week = useMemo(() => result?.weeks[0] ?? null, [result]);
 
+  /**
+   * 복사할 컬럼 — 합계는 뺀 일자만.
+   * 합계는 엑셀 쪽에 이미 수식이 있어서 덮어쓰면 안 된다.
+   */
+  const copyColumns = useMemo(
+    () => (result?.columns ?? []).filter((column) => column !== INFECTION_TOTAL_COLUMN),
+    [result],
+  );
+
   return (
     <>
       <FileDropZone file={file} onSelect={selectFile} disabled={isBusy} />
@@ -64,9 +74,12 @@ export function InfectionTab(): JSX.Element {
 
       {result !== null && week !== null && (
         <section className="result">
-          <div className="result__summary">
-            <span>기간 {week.label}</span>
-            <span>인원 {week.rows.length}명</span>
+          <div className="result__head">
+            <div className="result__summary">
+              <span>기간 {week.label}</span>
+              <span>인원 {week.rows.length}명</span>
+            </div>
+            <CopyValuesButton columns={copyColumns} rows={week.rows} />
           </div>
 
           <WarningList warnings={result.warnings} />
