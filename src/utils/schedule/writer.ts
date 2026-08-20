@@ -5,11 +5,14 @@ import {
   PUBLIC_LEAVE_KEYWORD,
   SATURDAY_LABEL,
   SCHEDULE_FULL_UNIT,
+  SCHEDULE_HOLIDAY_FILL_ARGB,
   SCHEDULE_HALF_UNIT,
   SCHEDULE_OFF_MARKER,
   SCHEDULE_PLAIN_VALUES,
   SCHEDULE_REST_MARKER,
   SCHEDULE_WORKING_WEEKDAYS,
+  SCHEDULE_WORK_FONT_NAME,
+  SCHEDULE_WORK_FONT_SIZE,
   SCHEDULE_WORK_MARKER,
   SPECIAL_DUTY_KEYWORD,
   WEEKDAY_LABELS,
@@ -27,7 +30,8 @@ const YEAR_LENGTH = 4;
  *   ① 날짜·요일 행을 해당 월에 맞게 고친다   (요일을 알아야 평일/주말을 가른다)
  *   ② 평일은 D, 토·일은 · 로 되돌린다        (이전 달 데이터를 모두 지운다)
  *   ③ 연차 기록을 off / 특근(D) 표기로 넣는다
- *   ④ 근무표에 적힌 값을 세어 집계 열을 채운다
+ *   ④ 휴일 칸에 색을 입히고 D 글자 서식을 맞춘다
+ *   ⑤ 근무표에 적힌 값을 세어 집계 열을 채운다
  *
  * 쓰기에 exceljs 를 쓰는 이유:
  * xlsx(SheetJS) 로 다시 쓰면 셀 배경색 등 서식이 모두 사라진다.
@@ -59,6 +63,7 @@ export async function applyLeaveToSchedule(
   const applied = entries.map((entry) => applyEntry(schedule, entry));
 
   for (const sheet of targets) {
+    applyCellStyles(sheet, holidays);
     fillCountColumns(sheet, warnings);
   }
 
@@ -285,7 +290,58 @@ function markerFor(entry: LeaveEntry): string {
 }
 
 // ---------------------------------------------------------------------------
-// ④ 집계 열 채우기
+// ④ 휴일 색칠 · D 글자 서식
+// ---------------------------------------------------------------------------
+
+/**
+ * 날짜 칸의 서식을 다시 입힌다.
+ *
+ * - 평일 칸은 배경색을 지운다. 지난달 근무표에서 쉬는 날이었던 칸에 색이 남아 있으면
+ *   이번 달 달력과 어긋나 보인다.
+ * - 토·일·공휴일·대체휴일 칸은 하늘색으로 칠한다. 쉬는 날 판단 기준은
+ *   값을 채울 때와 똑같아서(주말이거나 연차표에 붉게 적힌 날) 색과 내용이 항상 맞는다.
+ * - 근무(D) 글자는 맑은 고딕 10pt 굵게로 맞춘다.
+ *
+ * 날짜 행·요일 행까지 함께 칠해 세로로 한 칸이 통째로 구분되게 한다.
+ *
+ * 주의: exceljs 는 서식이 같은 셀끼리 style 객체를 공유한다.
+ * cell.fill = ... 처럼 바로 바꾸면 같은 서식을 쓰던 다른 칸까지 함께 바뀌어,
+ * 평일 칸을 지우면 휴일 색까지 지워지고 다시 칠하면 평일까지 칠해진다.
+ * 그래서 칸마다 style 을 새 객체로 복사한 뒤 바꾼다.
+ */
+function applyCellStyles(sheet: ScheduleSheet, holidays: ReadonlySet<string>): void {
+  const { year, month } = sheet;
+  if (year === null || month === null) {
+    return;
+  }
+
+  const rows = [sheet.headerRow, sheet.weekdayRow, ...sheet.nameRows.values()];
+
+  for (const [day, column] of sheet.dayColumns) {
+    const isRestDay =
+      holidays.has(formatIsoDate(year, month, day)) ||
+      !SCHEDULE_WORKING_WEEKDAYS.includes(weekdayIndex(year, month, day));
+
+    for (const row of rows) {
+      const cell = sheet.worksheet.getCell(row, column);
+      const style = { ...cell.style };
+
+      style.fill = isRestDay
+        ? { type: 'pattern', pattern: 'solid', fgColor: { argb: SCHEDULE_HOLIDAY_FILL_ARGB } }
+        : { type: 'pattern', pattern: 'none' };
+
+      if (compact(cellText(sheet.worksheet, row, column)) === SCHEDULE_WORK_MARKER) {
+        // 글자색 등 원래 서식은 두고 글꼴만 바꾼다.
+        style.font = { ...style.font, name: SCHEDULE_WORK_FONT_NAME, size: SCHEDULE_WORK_FONT_SIZE, bold: true };
+      }
+
+      cell.style = style;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ⑤ 집계 열 채우기
 // ---------------------------------------------------------------------------
 
 /**

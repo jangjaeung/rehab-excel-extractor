@@ -324,3 +324,12 @@ export const COPY_BUTTON_FAILED = '복사 실패';
 
 /** 복사 결과 문구를 몇 밀리초 동안 보여 줄지 */
 export const COPY_FEEDBACK_MS = 1800;
+
+/* ----- 근무표 서식 ----- */
+
+/** 휴일 칸 배경색 (원본 근무표가 쓰던 하늘색) */
+export const SCHEDULE_HOLIDAY_FILL_ARGB = 'FFDDEBF7';
+
+/** 근무(D) 글자 서식 */
+export const SCHEDULE_WORK_FONT_NAME = 'Malgun Gothic';
+export const SCHEDULE_WORK_FONT_SIZE = 10;
