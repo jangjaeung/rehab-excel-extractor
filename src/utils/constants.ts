@@ -300,3 +300,13 @@ export type LeaveSlotId = (typeof LEAVE_SLOTS)[number]['id'];
 /** 드롭존 기본 문구 */
 export const DROPZONE_BUTTON_LABEL = '엑셀 파일 선택';
 export const DROPZONE_HINT = '또는 이곳에 엑셀 파일을 끌어다 놓으세요';
+
+/* ----- 인원 순서 입력 ----- */
+
+/** 결과 표의 순서를 정하는 입력의 라벨과 안내 */
+export const NAME_ORDER_LABEL = '인원 순서 (선택)';
+export const NAME_ORDER_HINT =
+  '엑셀에서 이름 세로줄을 복사해 붙여넣으세요.\n붙여넣은 순서대로 표가 정렬됩니다.\n목록에 없는 사람은 뒤에 붙습니다.';
+
+/** 입력 상자 높이 (줄 수) */
+export const NAME_ORDER_ROWS = 4;

@@ -280,3 +280,73 @@ body {
   text-align: center;
   color: var(--color-muted);
 }
+
+/* ----- 인원 순서 입력 ----- */
+.name-order {
+  margin-top: 12px;
+}
+
+.name-order__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.name-order__label {
+  font-weight: 600;
+}
+
+.name-order__count {
+  color: var(--color-primary);
+  font-size: 13px;
+}
+
+.name-order__clear {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.name-order__clear:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.name-order__input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  /* 엑셀에서 붙여넣은 줄바꿈이 그대로 보이도록 한다. */
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.name-order__input:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -1px;
+}
+
+.name-order__input:disabled {
+  opacity: 0.6;
+}
+
+.name-order__missing {
+  margin: 6px 0 0;
+  color: #b45309;
+  font-size: 13px;
+  word-break: break-all;
+}

@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { FileDropZone } from '../components/FileDropZone';
 import { MessageBar } from '../components/MessageBar';
+import { NameOrderInput } from '../components/NameOrderInput';
 import { ResultTable } from '../components/ResultTable';
 import { WarningList } from '../components/WarningList';
 import { useExcelExtraction } from '../hooks/useExcelExtraction';
@@ -13,7 +14,20 @@ import { RESULT_FILE_NAME } from '../utils/constants';
  * 여기서는 배치와 사용자 상호작용만 다룬다.
  */
 export function SprayTab(): JSX.Element {
-  const { file, result, status, error, notice, selectFile, extract, save } = useExcelExtraction({
+  const {
+    file,
+    result,
+    status,
+    error,
+    notice,
+    selectFile,
+    extract,
+    save,
+    nameOrderText,
+    names,
+    missingNames,
+    setNameOrderText,
+  } = useExcelExtraction({
     parse: parseExcel,
     fileName: RESULT_FILE_NAME,
   });
@@ -25,6 +39,14 @@ export function SprayTab(): JSX.Element {
   return (
     <>
       <FileDropZone file={file} onSelect={selectFile} disabled={isBusy} />
+
+      <NameOrderInput
+        value={nameOrderText}
+        names={names}
+        missing={missingNames}
+        onChange={setNameOrderText}
+        disabled={isBusy}
+      />
 
       <div className="actions">
         <button type="button" className="button button--primary" onClick={() => void extract()} disabled={!canExtract}>

@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { ParseResult } from '../types/excel';
 import { saveResultWorkbook } from '../utils/excel/exporter';
 import { isExcelFile, toErrorMessage } from '../utils/file';
+import { applyNameOrder, findMissingNames, parseNameList } from '../utils/nameOrder';
 import { ACCEPTED_EXTENSIONS } from '../utils/constants';
 
 /** 화면이 표현해야 하는 진행 상태 */
@@ -10,6 +11,7 @@ export type ExtractionStatus = 'idle' | 'parsing' | 'saving';
 /** 훅이 화면에 제공하는 상태와 동작 */
 export interface ExcelExtraction {
   file: File | null;
+  /** 인원 순서가 반영된 결과 */
   result: ParseResult | null;
   status: ExtractionStatus;
   error: string | null;
@@ -17,6 +19,13 @@ export interface ExcelExtraction {
   selectFile: (file: File) => void;
   extract: () => Promise<void>;
   save: () => Promise<void>;
+  /** 인원 순서 입력에 붙여넣은 원본 글자 */
+  nameOrderText: string;
+  /** 그 글자에서 인식한 인원 */
+  names: string[];
+  /** 붙여넣었지만 결과에 없는 이름 */
+  missingNames: string[];
+  setNameOrderText: (text: string) => void;
 }
 
 /** 탭마다 달라지는 부분 */
@@ -38,6 +47,23 @@ export function useExcelExtraction({ parse, fileName }: ExcelExtractionOptions):
   const [status, setStatus] = useState<ExtractionStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [nameOrderText, setNameOrderText] = useState('');
+
+  const names = useMemo(() => parseNameList(nameOrderText), [nameOrderText]);
+
+  /**
+   * 붙여넣은 순서를 결과에 입힌다.
+   * 추출을 다시 하지 않아도 순서만 바꿔 볼 수 있도록 파생 값으로 둔다.
+   */
+  const orderedResult = useMemo(
+    () => (result === null ? null : applyNameOrder(result, names)),
+    [names, result],
+  );
+
+  const missingNames = useMemo(
+    () => (result === null ? [] : findMissingNames(result, names)),
+    [names, result],
+  );
 
   /** 새 파일을 선택하면 이전 결과를 모두 비운다. */
   const selectFile = useCallback((nextFile: File): void => {
@@ -80,7 +106,7 @@ export function useExcelExtraction({ parse, fileName }: ExcelExtractionOptions):
   }, [file, parse]);
 
   const save = useCallback(async (): Promise<void> => {
-    if (result === null || result.weeks.length === 0) {
+    if (orderedResult === null || orderedResult.weeks.length === 0) {
       setError('저장할 결과가 없습니다. 먼저 추출하세요.');
       return;
     }
@@ -90,14 +116,27 @@ export function useExcelExtraction({ parse, fileName }: ExcelExtractionOptions):
     setNotice(null);
 
     try {
-      const savedPath = await saveResultWorkbook(result, fileName);
+      const savedPath = await saveResultWorkbook(orderedResult, fileName);
       setNotice(savedPath === null ? '저장을 취소했습니다.' : `저장 완료: ${savedPath}`);
     } catch (caught) {
       setError(toErrorMessage(caught));
     } finally {
       setStatus('idle');
     }
-  }, [fileName, result]);
+  }, [fileName, orderedResult]);
 
-  return { file, result, status, error, notice, selectFile, extract, save };
+  return {
+    file,
+    result: orderedResult,
+    status,
+    error,
+    notice,
+    selectFile,
+    extract,
+    save,
+    nameOrderText,
+    names,
+    missingNames,
+    setNameOrderText,
+  };
 }

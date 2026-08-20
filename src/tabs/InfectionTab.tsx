@@ -1,6 +1,7 @@
 import { useMemo, type JSX } from 'react';
 import { FileDropZone } from '../components/FileDropZone';
 import { MessageBar } from '../components/MessageBar';
+import { NameOrderInput } from '../components/NameOrderInput';
 import { ResultTable } from '../components/ResultTable';
 import { WarningList } from '../components/WarningList';
 import { useExcelExtraction } from '../hooks/useExcelExtraction';
@@ -13,7 +14,20 @@ import { INFECTION_RESULT_FILE_NAME } from '../utils/constants';
  * 모든 시트를 합쳐 1일~말일의 하루치 건수로 보여 준다.
  */
 export function InfectionTab(): JSX.Element {
-  const { file, result, status, error, notice, selectFile, extract, save } = useExcelExtraction({
+  const {
+    file,
+    result,
+    status,
+    error,
+    notice,
+    selectFile,
+    extract,
+    save,
+    nameOrderText,
+    names,
+    missingNames,
+    setNameOrderText,
+  } = useExcelExtraction({
     parse: parseInfectionExcel,
     fileName: INFECTION_RESULT_FILE_NAME,
   });
@@ -27,6 +41,14 @@ export function InfectionTab(): JSX.Element {
   return (
     <>
       <FileDropZone file={file} onSelect={selectFile} disabled={isBusy} />
+
+      <NameOrderInput
+        value={nameOrderText}
+        names={names}
+        missing={missingNames}
+        onChange={setNameOrderText}
+        disabled={isBusy}
+      />
 
       <div className="actions">
         <button type="button" className="button button--primary" onClick={() => void extract()} disabled={!canExtract}>
