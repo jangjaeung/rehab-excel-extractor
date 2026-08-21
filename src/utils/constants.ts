@@ -15,8 +15,11 @@ export const INFECTION_ROW_LABEL = '감염치료건수';
 /** 이름 셀 아래로 PT 번호를 찾을 때 몇 행까지 볼지 */
 export const MAX_PT_LOOKUP_BELOW_ROWS = 3;
 
-/** 블록 머리글의 날짜 칸에서 일자를 뽑는 패턴 ('1일' → 1) */
-export const DAY_LABEL_PATTERN = /^(\d{1,2})\s*일$/;
+/**
+ * 블록 머리글의 날짜 칸에서 일자를 뽑는 패턴.
+ * '18일(오전반차)' 처럼 뒤에 메모가 붙는 칸이 있어 앞부분만 본다.
+ */
+export const DAY_LABEL_PATTERN = /^(\d{1,2})\s*일/;
 
 /** 감염치료 결과 테이블의 합계 컬럼 이름 */
 export const INFECTION_TOTAL_COLUMN = '합계';
@@ -40,7 +43,7 @@ export const WEEK_LABEL_SUFFIX = '주차';
 export const DEFAULT_ITEM_COUNT = 0;
 
 /** 블록 안에서 이름이 아닌 고정 라벨 (PT번호 없이 이름을 찾을 때 걸러 낸다) */
-export const BLOCK_LABEL_WORDS = ['치료사', '팀장', '건수', '유무', '타임', '월'];
+export const BLOCK_LABEL_WORDS = ['치료사', '팀장', '건수', '유무', '타임', '상세', '월'];
 
 /** PT 번호 행 위로 이름을 찾을 때 최대 몇 행까지 거슬러 올라갈지 (빈 행 대비) */
 export const MAX_NAME_LOOKUP_ROWS = 5;

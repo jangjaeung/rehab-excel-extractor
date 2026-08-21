@@ -69,10 +69,16 @@ export function findTotalHeaders(grid: SheetGrid): CellPosition[] {
 /**
  * 셀이 속한 블록의 가로 범위와 합계 열을 확정한다.
  *
- * 1. 항목 행보다 위(같은 행 포함)에 있는 헤더 중, 항목의 오른쪽에 있으면서
- *    가장 가까운 헤더를 찾는다 → 그 열이 이 블록의 합계 열이자 오른쪽 경계.
- * 2. 같은 헤더 행에서 항목 왼쪽에 있는 헤더는 왼쪽 블록의 끝이므로,
- *    그 다음 열이 이 블록의 왼쪽 경계가 된다.
+ * 좌우 블록의 시작 행이 서로 어긋나는 양식이 있어서(한쪽이 몇 행 밀려 시작한다)
+ * "같은 행에 있는 헤더" 로 경계를 잡으면 안 된다. 열을 기준으로 잡는다.
+ *
+ * 1. 오른쪽 경계 = 항목보다 오른쪽에서 **가장 가까운 열**의 합계건수 헤더.
+ *    그 열이 이 블록의 합계 열이다.
+ * 2. 왼쪽 경계 = 항목보다 왼쪽에 있는 합계건수 헤더 중 **가장 오른쪽 열**의 다음 열.
+ *    그 헤더가 왼쪽 블록의 끝이기 때문이다.
+ *
+ * 두 경우 모두 항목보다 위(같은 행 포함)에 있는 헤더만 본다.
+ * 그 아래 헤더는 다른 블록의 것이다.
  */
 export function resolveBlockBounds(headers: readonly CellPosition[], item: CellPosition): BlockBounds {
   // 항목보다 위쪽 헤더를 우선 사용하고, 없으면 전체 헤더를 대상으로 한다.
@@ -84,8 +90,8 @@ export function resolveBlockBounds(headers: readonly CellPosition[], item: CellP
     if (header.col <= item.col) {
       continue;
     }
-    // 행이 가까울수록, 같은 행이면 열이 가까울수록 우선한다.
-    const isCloser = right === null || header.row > right.row || (header.row === right.row && header.col < right.col);
+    // 열이 가까울수록, 같은 열이면 행이 가까울수록(아래일수록) 우선한다.
+    const isCloser = right === null || header.col < right.col || (header.col === right.col && header.row > right.row);
     if (isCloser) {
       right = header;
     }
@@ -96,10 +102,10 @@ export function resolveBlockBounds(headers: readonly CellPosition[], item: CellP
     return { totalColumn: null, headerRow: null, startCol: 0, endCol: UNBOUNDED_COLUMN };
   }
 
-  // 같은 헤더 행에서 항목 왼쪽에 있는 헤더 = 왼쪽 블록의 오른쪽 끝
+  // 항목 왼쪽에서 가장 오른쪽에 있는 헤더 = 왼쪽 블록의 오른쪽 끝
   let leftBoundary = 0;
   for (const header of candidates) {
-    if (header.row === right.row && header.col < item.col) {
+    if (header.col < item.col) {
       leftBoundary = Math.max(leftBoundary, header.col + 1);
     }
   }
@@ -109,7 +115,11 @@ export function resolveBlockBounds(headers: readonly CellPosition[], item: CellP
 
 /**
  * 항목 셀에서 위로 거슬러 올라가며 PT 번호를 찾고, 그 위에서 이름을 찾는다.
- * 탐색은 항상 블록의 열 범위 안에서만 한다.
+ *
+ * 탐색은 블록의 열 범위 안에서, **블록 머리글 아래까지만** 한다.
+ * PT 번호는 항상 머리글과 항목 사이에 적히기 때문이다.
+ * 머리글을 넘어가면 PT 번호를 빠뜨린 블록에서 위 블록의 번호를 집어
+ * 남의 실적으로 붙어 버린다.
  */
 export function findTherapistIdentity(
   grid: SheetGrid,
@@ -117,7 +127,9 @@ export function findTherapistIdentity(
   bounds: BlockBounds,
   totalHeaders: readonly CellPosition[],
 ): TherapistIdentity | null {
-  const lowestRow = Math.max(0, item.row - MAX_PT_LOOKUP_ROWS);
+  // 블록 머리글보다 위는 다른 블록이다.
+  const blockTop = bounds.headerRow === null ? 0 : bounds.headerRow + 1;
+  const lowestRow = Math.max(0, blockTop, item.row - MAX_PT_LOOKUP_ROWS);
   const searchEndCol = Math.min(bounds.endCol, item.col);
 
   for (let row = item.row; row >= lowestRow; row -= 1) {
@@ -172,28 +184,47 @@ export function extractPtNumber(value: CellValue): string | null {
 
 /**
  * PT 번호 셀의 바로 위 행부터 위로 올라가며 이름 셀을 찾는다.
- * 이름은 PT 번호와 같은 열에 있는 경우가 대부분이므로 같은 열을 우선 확인하고,
- * 없으면 같은 블록 범위 안에서 이름으로 볼 수 있는 첫 셀을 사용한다.
+ *
+ * 이름은 PT 번호와 **같은 열**에 적히므로 그 열을 끝까지 먼저 훑는다.
+ * 한 행씩 내려가며 같은 열과 블록 전체를 번갈아 보면,
+ * 이름과 PT 번호 사이에 다른 행이 끼어들었을 때
+ * 옆 칸의 고정 라벨(감염치료 상세 등)을 이름으로 잘못 집는다.
+ * (주차마다 블록에 행이 하나씩 늘거나 줄어드는 양식이 있다)
+ *
+ * 같은 열에서 못 찾으면 그때 블록 범위를 훑는다. 두 경우 모두 고정 라벨은 건너뛴다.
  */
 function findNameAbove(grid: SheetGrid, ptPosition: CellPosition, bounds: BlockBounds): string {
   const highestRow = Math.max(0, ptPosition.row - MAX_NAME_LOOKUP_ROWS);
 
   for (let row = ptPosition.row - 1; row >= highestRow; row -= 1) {
-    const sameColumnValue = getCell(grid, row, ptPosition.col);
-    if (isNameCandidate(sameColumnValue)) {
-      return toText(sameColumnValue);
+    const value = getCell(grid, row, ptPosition.col);
+    if (isPersonName(value)) {
+      return toText(value);
     }
+  }
 
+  for (let row = ptPosition.row - 1; row >= highestRow; row -= 1) {
     const lastCol = Math.min(bounds.endCol, getRowLength(grid, row) - 1);
     for (let col = bounds.startCol; col <= lastCol; col += 1) {
       const value = getCell(grid, row, col);
-      if (isNameCandidate(value)) {
+      if (isPersonName(value)) {
         return toText(value);
       }
     }
   }
 
   return '';
+}
+
+/** 이름 후보이면서 블록의 고정 라벨(치료사·감염치료건수·감염치료 상세 …)이 아닌 셀 */
+function isPersonName(value: CellValue): boolean {
+  return isNameCandidate(value) && !isBlockLabel(value);
+}
+
+/** 블록마다 반복되는 고정 라벨인지 (사람 이름이 아니다) */
+function isBlockLabel(value: CellValue): boolean {
+  const text = normalizeText(value);
+  return text.startsWith(SPRAY_ITEM_PREFIX) || BLOCK_LABEL_WORDS.some((word) => text.includes(word));
 }
 
 /**
@@ -218,12 +249,8 @@ function findNameWithoutPt(
     }
 
     const value = getCell(grid, row, bounds.startCol);
-    const text = normalizeText(value);
 
-    if (isBlank(value) || extractPtNumber(value) !== null) {
-      continue;
-    }
-    if (text.startsWith(SPRAY_ITEM_PREFIX) || BLOCK_LABEL_WORDS.some((word) => text.includes(word))) {
+    if (isBlank(value) || extractPtNumber(value) !== null || isBlockLabel(value)) {
       continue;
     }
 
