@@ -5,9 +5,12 @@ import {
   PUBLIC_LEAVE_KEYWORD,
   SATURDAY_LABEL,
   SCHEDULE_FULL_UNIT,
-  SCHEDULE_HOLIDAY_FILL_ARGB,
   SCHEDULE_HALF_UNIT,
+  SCHEDULE_HOLIDAY_FILL_ARGB,
+  SCHEDULE_MARKER_LINE_BREAK,
+  SCHEDULE_OFF_FONT_SIZE,
   SCHEDULE_OFF_MARKER,
+  SCHEDULE_PREFIXED_OFF_FONT_SIZE,
   SCHEDULE_PLAIN_VALUES,
   SCHEDULE_REST_MARKER,
   SCHEDULE_WORKING_WEEKDAYS,
@@ -273,9 +276,11 @@ function resolveStatus(previous: string, marker: string): ApplyStatus {
 
 /**
  * 기록 → 근무표에 넣을 표기.
- *   연차 종일 → off        연차 오후 → 오후 off
- *   공가 종일 → 공가 off    공가 오후 → 오후 공가 off
- *   특근      → D          (쉬는 것이 아니라 근무이므로 근무 표시를 넣는다)
+ *   연차 종일 → off         연차 오후 → 오후 + 줄바꿈 + off
+ *   공가 종일 → 공가+off     공가 오후 → 오후 공가 + 줄바꿈 + off
+ *   특근      → D           (쉬는 것이 아니라 근무이므로 근무 표시를 넣는다)
+ *
+ * 앞에 말이 붙을 때는 off 앞에서 줄을 바꾼다. 날짜 칸이 좁아 한 줄로는 잘려 보인다.
  */
 function markerFor(entry: LeaveEntry): string {
   if (entry.kind === SPECIAL_DUTY_KEYWORD) {
@@ -283,10 +288,13 @@ function markerFor(entry: LeaveEntry): string {
   }
 
   // 오전/오후가 안 적힌 반차는 종일과 구분할 수 없으므로 종일로 넣고 경고로 남긴다.
-  const period = entry.halfPeriod === null ? '' : `${entry.halfPeriod} `;
-  const reason = entry.kind === PUBLIC_LEAVE_KEYWORD || entry.kind === FAMILY_EVENT_KEYWORD ? `${entry.kind} ` : '';
+  const period = entry.halfPeriod ?? '';
+  const reason = entry.kind === PUBLIC_LEAVE_KEYWORD || entry.kind === FAMILY_EVENT_KEYWORD ? entry.kind : '';
+  const prefix = [period, reason].filter((part) => part !== '').join(' ');
 
-  return `${period}${reason}${SCHEDULE_OFF_MARKER}`;
+  return prefix === ''
+    ? SCHEDULE_OFF_MARKER
+    : `${prefix}${SCHEDULE_MARKER_LINE_BREAK}${SCHEDULE_OFF_MARKER}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +309,8 @@ function markerFor(entry: LeaveEntry): string {
  * - 토·일·공휴일·대체휴일 칸은 하늘색으로 칠한다. 쉬는 날 판단 기준은
  *   값을 채울 때와 똑같아서(주말이거나 연차표에 붉게 적힌 날) 색과 내용이 항상 맞는다.
  * - 근무(D) 글자는 맑은 고딕 10pt 굵게로 맞춘다.
+ * - off 는 9pt, 앞에 말이 붙은 off(공가 등)는 7pt + 자동 줄바꿈으로 맞춘다.
+ *   원본 근무표가 쓰던 규칙과 같다. 칸이 좁아 큰 글자로는 잘려 보인다.
  *
  * 날짜 행·요일 행까지 함께 칠해 세로로 한 칸이 통째로 구분되게 한다.
  *
@@ -330,9 +340,23 @@ function applyCellStyles(sheet: ScheduleSheet, holidays: ReadonlySet<string>): v
         ? { type: 'pattern', pattern: 'solid', fgColor: { argb: SCHEDULE_HOLIDAY_FILL_ARGB } }
         : { type: 'pattern', pattern: 'none' };
 
-      if (compact(cellText(sheet.worksheet, row, column)) === SCHEDULE_WORK_MARKER) {
+      const text = compact(cellText(sheet.worksheet, row, column));
+
+      if (text === SCHEDULE_WORK_MARKER) {
         // 글자색 등 원래 서식은 두고 글꼴만 바꾼다.
         style.font = { ...style.font, name: SCHEDULE_WORK_FONT_NAME, size: SCHEDULE_WORK_FONT_SIZE, bold: true };
+      } else if (text.includes(SCHEDULE_OFF_MARKER)) {
+        // off 앞에 말이 붙으면 두 줄이 되므로 글자를 줄이고 자동 줄바꿈을 켠다.
+        const prefixed = text !== SCHEDULE_OFF_MARKER;
+        style.font = {
+          ...style.font,
+          name: SCHEDULE_WORK_FONT_NAME,
+          size: prefixed ? SCHEDULE_PREFIXED_OFF_FONT_SIZE : SCHEDULE_OFF_FONT_SIZE,
+          bold: true,
+        };
+        if (prefixed) {
+          style.alignment = { ...style.alignment, wrapText: true };
+        }
       }
 
       cell.style = style;

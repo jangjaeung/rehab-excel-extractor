@@ -333,3 +333,15 @@ export const SCHEDULE_HOLIDAY_FILL_ARGB = 'FFDDEBF7';
 /** 근무(D) 글자 서식 */
 export const SCHEDULE_WORK_FONT_NAME = 'Malgun Gothic';
 export const SCHEDULE_WORK_FONT_SIZE = 10;
+
+/**
+ * off 표기 글자 크기.
+ * 원본 근무표가 쓰던 규칙을 그대로 따른다.
+ *   off            9pt
+ *   공가\noff 처럼 앞에 말이 붙는 것은 7pt + 자동 줄바꿈 (칸이 좁아 그래야 보인다)
+ */
+export const SCHEDULE_OFF_FONT_SIZE = 9;
+export const SCHEDULE_PREFIXED_OFF_FONT_SIZE = 7;
+
+/** 'off' 앞에 넣을 줄바꿈 */
+export const SCHEDULE_MARKER_LINE_BREAK = '\n';
