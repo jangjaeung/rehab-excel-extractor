@@ -338,13 +338,17 @@ export const SCHEDULE_WORK_FONT_NAME = 'Malgun Gothic';
 export const SCHEDULE_WORK_FONT_SIZE = 10;
 
 /**
- * off 표기 글자 크기.
- * 원본 근무표가 쓰던 규칙을 그대로 따른다.
- *   off            9pt
- *   공가\noff 처럼 앞에 말이 붙는 것은 7pt + 자동 줄바꿈 (칸이 좁아 그래야 보인다)
+ * off 표기 글자 크기. 칸이 좁아 글자가 길수록 줄여야 잘리지 않는다.
+ *   off              10pt   (D 와 같은 크기)
+ *   오전 off / 오후 off  8pt
+ *   공가 off / 경조 off  7pt  (오후 공가 off 처럼 셋이 겹치면 가장 작은 것을 쓴다)
  */
-export const SCHEDULE_OFF_FONT_SIZE = 9;
-export const SCHEDULE_PREFIXED_OFF_FONT_SIZE = 7;
+/** 소속(OT/PT) 글자 크기 */
+export const SCHEDULE_DEPARTMENT_FONT_SIZE = 8;
+
+export const SCHEDULE_OFF_FONT_SIZE = 10;
+export const SCHEDULE_HALF_OFF_FONT_SIZE = 8;
+export const SCHEDULE_REASON_OFF_FONT_SIZE = 7;
 
 /** 'off' 앞에 넣을 줄바꿈 */
 export const SCHEDULE_MARKER_LINE_BREAK = '\n';
